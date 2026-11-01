@@ -1317,6 +1317,14 @@ function undoLog(logId){
 /* 版本自检：确认部署的是不是最新版、下载环境是否正常 */
 /* 更新日志（新在前）。每次升级补一条，设置页自动列出 */
 const CHANGELOG = [
+  { v:'3.9', date:'2026-11-01', title:'★修复「导出全部数据」导不出来',
+    items:[
+      '<b>根因</b>：传给「另存为」窗口的 MIME 带了 charset（如 application/json;<b>charset=utf-8</b>），浏览器不认这个格式，窗口弹不出来 → 导出静默失败',
+      '净化 MIME：只传纯类型（application/json），另存为窗口可正常弹出',
+      '<b>导出改为三级降级</b>：另存为 → 浏览器下载 → 兜底弹窗（内容可直接复制/分享），不会再静默失败',
+      '去掉"提前报成功"的假提示：以前不管成没成都弹「备份文件已导出」，现在只在真正存好后提示',
+      '设置页自检新增「💾 实测导出」按钮：真跑一遍导出通路，能弹另存为窗口就是通的，并在面板显示保存方式/下载属性诊断',
+    ]},
   { v:'3.8', date:'2026-11-01', title:'★修复设置页整页消失（开关全不见的真凶）',
     items:[
       '<b>关键修复</b>：设置页曾整页消失，导致自动备份、定时备份、客户签字等所有开关都看不见',
@@ -1406,7 +1414,27 @@ function renderChangelog(){
   }).join('');
 }
 
-const APP_VER = '3.8';
+const APP_VER = '3.9';
+/* 导出通路实测：真跑一遍另存为/下载，把结果直接告诉你 */
+function testExportOnce(){
+  var name = '导出测试_' + new Date().toISOString().slice(0,10) + '.txt';
+  var content = '这是导出测试文件\n时间：' + new Date().toLocaleString('zh-CN') + '\n如果你看到这个文件，说明导出通路正常。';
+  if (canSavePicker()) {
+    saveViaPicker(new Blob([content], { type: 'text/plain' }), name, 'text/plain').then(function(r){
+      if (r === 'ok') toast('✅ 另存为成功！文件已保存到你选的位置');
+      else if (r === 'cancel') toast('已取消（这不算失败）');
+      else {
+        toast('另存为失败，改用浏览器下载…');
+        try { smartBlobDownload(new Blob([content],{type:'text/plain'}), name); } catch(e){ showSaveFallback(content, name, 'text/plain'); }
+      }
+    });
+    return;
+  }
+  toast('当前浏览器不支持「另存为」，测试浏览器下载…');
+  try { smartBlobDownload(new Blob([content],{type:'text/plain'}), name); }
+  catch(e){ showSaveFallback(content, name, 'text/plain'); }
+}
+
 function checkVer(){
   const box=document.getElementById('verInfo');
   const v=document.getElementById('appVer');
@@ -1418,7 +1446,8 @@ function checkVer(){
   lines.push('· 打开方式：<b>' + (proto==='file' ? '本地文件 file://（❌ 不能下载，请改用网址）' : '网址 ' + proto + '（✅ 可以下载）') + '</b>');
   if (isWeChat()) lines.push('· <b style="color:#e34">当前是微信内置浏览器，禁止下载</b> → 点右上角「···」选「在浏览器打开」');
   // 2 关键模块
-  lines.push('· 保存方式：<b>' + (canSavePicker() ? '支持「另存为」对话框（✅ 推荐，绕开下载）' : '仅浏览器下载（手机常见）') + '</b>');
+  lines.push('· 保存方式：<b>' + (canSavePicker() ? '✅ 支持「另存为」对话框（绕开浏览器下载）' : '⚠️ 不支持另存为，走浏览器下载') + '</b>');
+  lines.push('· 下载属性：<b>' + (canDownloadAttr() ? '✅ 支持' : '❌ 不支持') + '</b>');
   const mods = [
     ['XLSX生成器', typeof XLSX !== 'undefined' && typeof XLSX.build === 'function'],
     ['下载主函数', typeof smartDownload === 'function'],
@@ -1436,8 +1465,11 @@ function checkVer(){
     lines.push('· 本机订单：' + n + ' 张');
   } catch(e){}
   box.innerHTML = lines.join('<br>')
-    + '<div style="margin-top:8px"><button class="btn btn-add" style="margin:0;padding:8px;font-size:13px" onclick="testDownload()">🧪 测一下能否下载</button>'
-    + ' <span style="font-size:11px;color:#999">会下载一个极小的测试文件</span></div>';
+    + '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+    + '<button class="btn btn-add" style="margin:0;padding:8px;font-size:13px" onclick="testDownload()">🧪 测下载</button>'
+    + '<button class="btn btn-primary" style="margin:0;padding:8px;font-size:13px" onclick="testExportOnce()">💾 实测导出（走另存为）</button>'
+    + '</div>'
+    + '<div style="font-size:11px;color:#999;margin-top:4px">「实测导出」会真跑一遍导出通路：能弹出另存为窗口 = 通路正常；没弹窗 = 浏览器不支持，会自动降级并提示。</div>';
   toast('自检完成，看下方结果');
 }
 /* 下载自检：生成最小文件，验证浏览器到底让不让下 */
@@ -4244,18 +4276,31 @@ function canSavePicker(){
   try { return typeof window.showSaveFilePicker === 'function'; } catch(e){ return false; }
 }
 function extOf(name){ const i=String(name||'').lastIndexOf('.'); return i>=0?String(name).slice(i):''; }
+/* MIME 必须净化：accept 的 key 只认纯类型，带 charset 会导致「另存为」窗口弹不出来 */
+function cleanMime(m){
+  var v = String(m || 'application/octet-stream');
+  var i = v.indexOf(';'); if (i >= 0) v = v.slice(0, i);
+  v = v.trim();
+  if (!v || v.indexOf('/') < 0) v = 'application/octet-stream';
+  return v;
+}
 function saveViaPicker(data, filename, mime){
   if (!canSavePicker()) return Promise.resolve('fail');
-  const ext = extOf(filename);
-  const opts = { suggestedName: filename,
-    types: [{ description: '保存文件', accept: { [mime || 'application/octet-stream']: [ext || '.txt'] } }] };
+  var ext = extOf(filename);
+  var blob = (data instanceof Blob) ? data : new Blob([data], { type: cleanMime(mime) });
+  var opts;
+  try {
+    opts = { suggestedName: filename,
+      types: [{ description: '保存文件', accept: { [cleanMime(mime)]: [ext || '.txt'] } }] };
+  } catch(e) { opts = { suggestedName: filename }; }   // accept 构造失败也要能弹窗
   return window.showSaveFilePicker(opts).then(function(handle){
     return handle.createWritable().then(function(w){
-      return w.write(data).then(function(){ return w.close(); });
+      return w.write(blob).then(function(){ return w.close(); });
     });
   }).then(function(){ return 'ok'; })
     .catch(function(e){
       if (e && e.name === 'AbortError') return 'cancel';   // 用户取消
+      try { console.warn('[另存为失败]', e && e.name, e && e.message); } catch(x){}
       return 'fail';
     });
 }
@@ -4264,24 +4309,25 @@ function saveViaPicker(data, filename, mime){
    电脑：弹另存为 → 自己选位置（桌面/U盘/网盘文件夹都行）
    手机：没有另存为接口，直接走标准下载 + 兜底弹窗 */
 function exportFile(payload, filename, mime){
-  // Blob 先转成可直接写入的数据
-  var toData = function(blob){
-    return blob.arrayBuffer ? blob.arrayBuffer() : Promise.resolve(blob);
-  };
+  var blob = (payload instanceof Blob) ? payload : new Blob([payload], { type: cleanMime(mime) });
+  // ① 电脑：优先弹系统「另存为」
   if (canSavePicker()) {
-    var data = (payload instanceof Blob) ? payload : new Blob([payload], { type: mime || 'text/plain' });
-    saveViaPicker(data, filename, mime).then(function(r){
-      if (r === 'ok') { toast('已保存到你选的位置'); return; }
-      if (r === 'cancel') { return; }               // 用户取消，不再降级
-      // fail：降级标准下载
-      if (payload instanceof Blob) smartBlobDownload(payload, filename);
-      else smartDownload(payload, filename, mime);
+    saveViaPicker(blob, filename, mime).then(function(r){
+      if (r === 'ok') { toast('✅ 已保存到你选的位置：' + filename); return; }
+      if (r === 'cancel') { return; }
+      // 另存为失败 → 降级标准下载
+      toast('「另存为」不可用，改用浏览器下载…');
+      try { smartBlobDownload(blob, filename); }
+      catch(e2){ showSaveFallback(payload instanceof Blob ? '' : payload, filename, mime); }
     });
     return;
   }
-  // 不支持另存为（手机）：标准下载
-  if (payload instanceof Blob) smartBlobDownload(payload, filename);
-  else smartDownload(payload, filename, mime);
+  // ② 手机/不支持另存为：标准下载
+  try { smartBlobDownload(blob, filename); return; } catch(e){}
+  // ③ 还不行：兜底弹窗（显示内容，可复制/分享）
+  if (!(payload instanceof Blob)) { showSaveFallback(payload, filename, mime); return; }
+  blob.text && blob.text().then(function(t){ showSaveFallback(t, filename, mime); })
+    .catch(function(){ toast('导出失败，请换个浏览器重试'); });
 }
 
 function downloadCsv(rows, filename){
@@ -5509,9 +5555,8 @@ function exportData() {
   ['orders','customers','prices','titles','staffs','warehouses','stock','stockLogs','trash','opLogs','cfg'].forEach(k => {
     data[k] = DB.get(k, null);
   });
-      exportFile(JSON.stringify(data, null, 2), `开单助手备份_${new Date().toISOString().slice(0,10)}.json`, 'application/json;charset=utf-8');
+      exportFile(JSON.stringify(data, null, 2), `开单助手备份_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
   logOp('导出本地备份', 'backup', { detail:'含订单/回收站/操作日志', who: whoAmI() });
-  toast('备份文件已导出');
 }
 function doImport(input) {
   const file = input.files[0];
