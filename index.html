@@ -80,13 +80,16 @@
   #printModal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; display: none; flex-direction: column; }
   #printModal.show { display: flex; }
   #printModal .pm-body { flex: 1; overflow-y: auto; padding: 20px; }
+  .btn-undo{background:#fff3e0;color:#ff9f1c;border:1px solid #ffd8a8;border-radius:6px;
+    padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;}
+  .btn-undo:active{background:#ffe0b2;}
   #printModal .pm-paper { background: #fff; margin: 0 auto; padding: 20px; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
   #printModal .pm-foot { padding: 14px; background: #fff; display: flex; gap: 10px; }
   #printModal .pm-foot button { flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; }
   .pm-title { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; }
   .pm-line { font-size: 13px; line-height: 1.8; }
-  .pm-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-  .pm-table th, .pm-table td { border: 1px solid #333; padding: 4px 6px; text-align: left; }
+  .pm-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; table-layout: fixed; }
+  .pm-table th, .pm-table td { border: 1px solid #333; padding: 4px 6px; text-align: left; overflow-wrap: break-word; word-break: break-all; }
   .pm-table th { background: #f5f5f5; }
   .pm-right { text-align: right; }
   .pm-center { text-align: center; }
@@ -363,9 +366,12 @@
   </div>
   <div class="card" style="padding:10px;margin-bottom:8px">
     <input id="listSearch" placeholder="🔍 搜客户 / 单号 / 商品名" oninput="onSearch()" style="width:100%;height:38px;border:1px solid #ddd;border-radius:8px;padding:0 10px;font-size:14px">
-    <div class="row" style="margin-top:8px;gap:6px">
-      <div style="flex:1"><input id="fltFrom" type="date" onchange="onSearch()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:13px"></div>
-      <div style="flex:1"><input id="fltTo" type="date" onchange="onSearch()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:13px"></div>
+    <div class="row" style="margin-top:8px;gap:6px;font-size:12px;color:#888">
+      <div style="flex:1">从</div><div style="flex:1">到</div>
+    </div>
+    <div class="row" style="gap:6px">
+      <div style="flex:1"><input id="fltFrom" type="date" onchange="onSearch()" onblur="onSearch()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:13px"></div>
+      <div style="flex:1"><input id="fltTo" type="date" onchange="onSearch()" onblur="onSearch()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:13px"></div>
     </div>
     <div class="row" style="margin-top:6px;gap:6px">
       <select id="fltState" onchange="onSearch()" style="flex:1;height:34px;border:1px solid #ddd;border-radius:6px;font-size:13px">
@@ -381,7 +387,10 @@
       </select>
     </div>
     <div id="searchSum" style="font-size:12px;color:#888;margin-top:6px"></div>
-    <button class="btn btn-ghost" style="margin-top:6px;padding:8px;font-size:13px" onclick="clearSearch()">清除筛选</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn btn-add" style="margin:0;flex:2;padding:12px;font-size:15px" onclick="doSearch()">确定（搜索）</button>
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:12px;font-size:14px" onclick="clearSearch()">清除</button>
+    </div>
   </div>
   <div id="orderList"></div>
   <div class="batchbar">
@@ -395,12 +404,38 @@
     <button data-sub="custdebt" onclick="switchStat(this)">客户欠款</button>
     <button data-sub="sales" onclick="switchStat(this)">商品销量</button>
   </div>
-  <div class="row" style="margin-bottom:10px">
-    <select id="expScope">
+  <div class="row" style="margin-bottom:8px">
+    <select id="expScope" onchange="onExpScopeChange()">
       <option value="all">导出：全部订单</option>
+      <option value="cust">导出：指定客户（对账用）</option>
+      <option value="filtered">导出：当前筛选结果</option>
+      <option value="thismonth">导出：本月</option>
+      <option value="lastmonth">导出：上月</option>
+      <option value="today">导出：今天</option>
     </select>
   </div>
-  <button class="btn btn-add" onclick="exportCsv()">导出汇总为CSV</button>
+  <div id="expCustRow" style="display:none;margin-bottom:8px">
+    <label style="font-size:12px">选择客户</label>
+    <select id="expCust" onchange="onExpCustChange()"></select>
+    <div id="expCustInfo" style="font-size:12px;color:#666;margin-top:4px;line-height:1.6"></div>
+  </div>
+  <div class="row" style="margin-bottom:8px;gap:6px">
+    <div style="flex:1"><label style="font-size:12px">文件格式</label>
+      <select id="expFmt" onchange="saveExpCfg()">
+        <option value="xlsx">Excel (.xlsx) 多表</option>
+        <option value="csv">CSV（纯文本）</option>
+      </select></div>
+    <div style="flex:1"><label style="font-size:12px">明细排法</label>
+      <select id="expMode" onchange="saveExpCfg()">
+        <option value="row">一行一个商品</option>
+        <option value="order">一行一张单</option>
+      </select></div>
+  </div>
+  <button class="btn btn-add" onclick="exportCsv()">📊 导出汇总</button>
+  <div class="card" style="margin-top:8px;padding:10px">
+    <div class="meta" style="margin-bottom:6px">勾选要导出的列（Excel 里每列都会自动调好列宽）</div>
+    <div id="expColBox"></div>
+  </div>
   <div id="statBody"></div>
 </div>
 <div class="page" id="page-statdetail">
@@ -474,15 +509,35 @@
   <input id="cfgPrintUrl" placeholder="留空=自动，或填 http://192.168.1.100:8080/api/print">
   <div class="row" style="margin-top:8px">
     <div><label>打印纸张</label>
-      <select id="cfgPrintMedia" onchange="saveCfg()">
+      <select id="cfgPrintMedia" onchange="onPrintMediaChange()">
         <option value="80">80mm 热敏</option>
         <option value="58">58mm 热敏</option>
         <option value="A4">A4</option>
         <option value="A5">A5</option>
+        <option value="custom">✏️ 自定义尺寸…</option>
       </select></div>
     <div><label>份数</label>
       <select id="cfgPrintCopies" onchange="saveCfg()">
         <option value="1">1 份</option><option value="2">2 份</option><option value="3">3 份</option>
+      </select></div>
+  </div>
+  <div class="row" id="customMediaRow" style="margin-top:8px;display:none">
+    <div><label>纸宽(mm)</label><input id="cfgMediaW" type="number" step="1" min="20" max="500" value="80" oninput="saveCfg()" placeholder="如 80"></div>
+    <div><label>纸高(mm)</label><input id="cfgMediaH" type="number" step="1" min="20" max="2000" value="200" oninput="saveCfg()" placeholder="如 200"></div>
+  </div>
+  <div id="customMediaTip" style="font-size:12px;color:#888;margin-top:4px;display:none">
+    自定义纸张会作为 CUPS 的 Custom.宽x高mm 下发给打印机；有些打印机不支持自定义，打不出来就换回 80mm/A4。
+  </div>
+  <div class="row" style="margin-top:6px">
+    <div><label>常用自定义尺寸</label>
+      <select id="mediaPreset" onchange="applyMediaPreset(this)">
+        <option value="">— 点击套用 —</option>
+        <option value="80x200">80 x 200（小票长）</option>
+        <option value="76x130">76 x 130（快递单）</option>
+        <option value="100x150">100 x 150（标签）</option>
+        <option value="100x180">100 x 180</option>
+        <option value="210x140">210 x 140（A5横）</option>
+        <option value="241x140">241 x 140</option>
       </select></div>
   </div>
   <div class="row" style="margin-top:8px">
@@ -644,6 +699,10 @@
       <div><div class="txt">显示合计行</div><div class="sub">底部一行「合计 数量 / 金额」</div></div>
       <label class="switch"><input type="checkbox" id="tplShowSum" onchange="saveGoodsCols()"><span class="slider"></span></label>
     </div>
+    <div class="switch-row" style="margin-top:8px">
+      <div><div class="txt">数量列带单位</div><div class="sub">默认关闭：只显示数字（如 5）；打开后显示 5箱</div></div>
+      <label class="switch"><input type="checkbox" id="tplShowQtyUnit" onchange="saveGoodsCols()"><span class="slider"></span></label>
+    </div>
   </div>
 
   <label style="margin-top:16px">打印模板排版</label>
@@ -789,6 +848,59 @@ function addLog(entry){
   logs.unshift(rec);
   DB.set(OPLOG_KEY, logs.slice(0, OPLOG_KEEP));
 }
+/* ============ 撤销快照 ============
+   改单/删单前把原单完整存一份，日志里就能一键复原 */
+const SNAP_KEEP = 60;   // 最多保留 60 份快照，避免占太多空间
+function saveSnapshot(order, logId){
+  try{
+    if(!order || !order.id) return null;
+    const snaps = DB.get('snapshots', []);
+    const rec = {
+      id: 'snap' + Date.now() + Math.random().toString(36).slice(2,6),
+      logId: logId || '',
+      t: new Date().toISOString(),
+      orderId: order.id,
+      order: JSON.parse(JSON.stringify(order))   // 完整副本
+    };
+    snaps.unshift(rec);
+    DB.set('snapshots', snaps.slice(0, SNAP_KEEP));
+    return rec.id;
+  }catch(e){ return null; }
+}
+function getSnapByLog(logId){
+  if(!logId) return null;
+  const list = DB.get('snapshots', []);
+  return list.find(x => x.logId === logId) || null;
+}
+function getSnapById(sid){
+  const list = DB.get('snapshots', []);
+  return list.find(x => x.id === sid) || null;
+}
+/* 复原：把快照里的订单写回 */
+function restoreSnapshot(sid){
+  const snap = getSnapById(sid);
+  if(!snap){ toast('快照已过期，无法复原'); return false; }
+  const order = snap.order;
+  const orders = DB.get('orders', []);
+  const idx = orders.findIndex(o => o.id === order.id);
+  if (idx >= 0) {
+    // 订单还在 → 覆盖回旧版本
+    orders[idx] = JSON.parse(JSON.stringify(order));
+  } else {
+    // 订单已被删 → 从回收站捞回来，并恢复旧版本
+    const trash = DB.get('trash', []);
+    const ti = trash.findIndex(t => t && t.data && t.data.id === order.id);
+    if (ti >= 0) trash.splice(ti, 1);      // 从回收站移除
+    DB.set('trash', trash);
+    orders.unshift(JSON.parse(JSON.stringify(order)));
+  }
+  DB.set('orders', orders);
+  // 记一条"撤销"日志
+  logOp('撤销操作', 'undo', { orderNo: order.no, cust: order.cust,
+    detail: `已复原到操作前的状态（金额¥${fmt(order.payable)} 已付¥${fmt(order.paid)}）`, who: whoAmI() });
+  return true;
+}
+
 // 便捷写法：自动抓当前业务员/设备
 function logOp(act, kind, extra){ addLog(Object.assign({ act, kind }, extra || {})); }
 function whoAmI(){
@@ -812,11 +924,7 @@ function exportOpLog(){
     l.who || devFullName(l) || '', devFullName(l) || '', l.detail || ''
   ].map(cell => '"' + String(cell).replace(/"/g,'""') + '"'));
   const csv = '\ufeff' + [head.join(',')].concat(rows.map(r=>r.join(','))).join('\r\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `开单助手操作日志_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click(); toast('日志已导出');
+  smartDownload(csv, `开单助手操作日志_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
 }
 
 // ========== 回收站模块 ==========
@@ -866,7 +974,13 @@ function softDeleteOrder(id, reason){
   orders.splice(idx, 1);
   DB.set('orders', orders);
   state.selectedOrders.delete(id);
-  logOp('删除订单', 'trash', { orderNo: o.no, cust: o.cust, detail: `金额¥${fmt(o.payable)}，${reason||'手动删除'}`, who: whoAmI() });
+  const _lgId2 = 'log' + Date.now() + Math.random().toString(36).slice(2,6);
+  const _sid2 = saveSnapshot(o, _lgId2);
+  logOp('删除订单', 'trash', Object.assign({
+    id: _lgId2,
+    orderNo: o.no, cust: o.cust,
+    detail: `金额¥${fmt(o.payable)}，${reason||'手动删除'}`, who: whoAmI()
+  }, _sid2 ? { snapId: _sid2 } : {}));
   return true;
 }
 function restoreOrder(trashId){
@@ -1016,6 +1130,149 @@ ${expTxt ? expTxt : ''}${x.devId !== getDeviceInfo().id ? `\n来源设备：${es
     </div>`;
   }).join('');
 }
+/* 某一张订单的历次"改前版本"（按时间倒序，最新在前） */
+function getOrderSnapshots(orderId){
+  if(!orderId) return [];
+  return (DB.get('snapshots',[])||[])
+    .filter(x => x && x.order && x.order.id === orderId)
+    .sort((a,b)=> new Date(b.t) - new Date(a.t));
+}
+/* 快照对应的日志（拿操作人、动作名） */
+function getSnapLog(snap){
+  const logs = DB.get(OPLOG_KEY, []) || [];
+  return logs.find(l => l && (l.id === snap.logId || l.snapId === snap.id)) || null;
+}
+/* 两个版本的差异摘要 */
+function diffSnaps(oldO, newO){
+  const d = [];
+  if (fmt(oldO.payable) !== fmt(newO.payable)) d.push(`金额 ¥${fmt(oldO.payable)} → ¥${fmt(newO.payable)}`);
+  if (fmt(oldO.paid)    !== fmt(newO.paid))    d.push(`已付 ¥${fmt(oldO.paid)} → ¥${fmt(newO.paid)}`);
+  if (fmt(oldO.debt)    !== fmt(newO.debt))    d.push(`欠款 ¥${fmt(oldO.debt)} → ¥${fmt(newO.debt)}`);
+  const gOld = (oldO.goods||[]).map(g=>`${g.name}x${g.qty}`).join('、');
+  const gNew = (newO.goods||[]).map(g=>`${g.name}x${g.qty}`).join('、');
+  if (gOld !== gNew) d.push(`商品：${gOld||'无'} → ${gNew||'无'}`);
+  if ((oldO.cust||'') !== (newO.cust||'')) d.push(`客户：${oldO.cust||'无'} → ${newO.cust||'无'}`);
+  if ((oldO.remark||'') !== (newO.remark||'')) d.push('备注已改');
+  return d.length ? d : ['（内容无变化）'];
+}
+function snapTime(t){
+  if(!t) return '';
+  const d = new Date(t), p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+/* 订单详情里的「修改前记录」卡片 */
+function buildOrderHistoryCard(o){
+  try{
+    const snaps = getOrderSnapshots(o.id);
+    if(!snaps.length) return '';
+    const items = snaps.map(function(sp, i){
+      const oldO = sp.order;
+      const lg = getSnapLog(sp);
+      const act = lg ? (lg.act||'修改') : '修改';
+      const who = lg ? (lg.who || devFullName(lg) || '—') : '—';
+      const diffs = diffSnaps(oldO, o);
+      return `
+    <div class="card" style="padding:10px;margin-bottom:6px;background:#fafbfc">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span class="tag tag-yellow">改前版本</span>
+        <span style="font-size:12px;color:#888">${snapTime(sp.t)}</span>
+        <span style="font-size:12px;color:#666">${esc(act)} · ${esc(who)}</span>
+      </div>
+      <div class="meta" style="font-size:12px">
+        金额 ¥${fmt(oldO.payable)}　已付 ¥${fmt(oldO.paid)}　欠款 ¥${fmt(oldO.debt)}<br>
+        商品：${esc((oldO.goods||[]).map(g=>g.name+'x'+g.qty).join('、'))||'无'}
+        ${oldO.remark?`<br>备注：${esc(oldO.remark)}`:''}
+      </div>
+      ${i===0?`<div style="font-size:11px;color:#e34;margin-top:5px;line-height:1.6">与当前相比：${diffs.map(x=>esc(x)).join('；')}</div>`:''}
+      <div class="ops" style="margin-top:6px">
+        <button style="background:#e8f1ff;color:#2b7de9" onclick="showSnapDetail('${sp.id}')">看改前详情</button>
+        <button style="background:#fff3e0;color:#ff9f1c" onclick="askRestoreSnap('${sp.id}','${esc(o.no)}')">复原到此版本</button>
+      </div>
+    </div>`;
+    }).join('');
+    return `
+  <div class="card" style="padding:10px">
+    <div class="meta" style="font-weight:600;margin-bottom:6px">📝 修改前记录（${snaps.length} 次修改，最新在前）</div>
+    ${items}
+  </div>`;
+  }catch(e){ return ''; }
+}
+/* 看某个改前版本的完整内容 */
+function showSnapDetail(sid){
+  const sp = getSnapById(sid);
+  if(!sp){ toast('快照已过期'); return; }
+  const o = sp.order;
+  const old = document.getElementById('snapModal'); if(old&&old.remove) old.remove();
+  const m=document.createElement('div'); m.id='snapModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:420;display:flex;align-items:center;justify-content:center;padding:14px';
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;width:100%;max-width:360px;border-radius:12px;padding:14px;max-height:86%;overflow:auto';
+  box.innerHTML=`
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">改前版本 · ${esc(o.no)}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:10px">${snapTime(sp.t)}</div>
+    <div class="card detail" style="margin-bottom:8px">
+      ${(o.goods||[]).map(g=>`<div class="line"><span>${esc(g.name)} ${g.spec?'('+esc(g.spec)+')':''} x${g.qty}${g.unit||''}</span><span>¥${fmt((+g.qty||0)*(+g.price||0))}</span></div>`).join('')||'<div class="meta">无商品</div>'}
+      <div class="line"><span><b>合计</b></span><span><b>¥${fmt(o.payable)}</b></span></div>
+      <div class="line"><span>已付</span><span>¥${fmt(o.paid)}</span></div>
+      <div class="line"><span>欠款</span><span>¥${fmt(o.debt)}</span></div>
+    </div>
+    <div class="meta" style="line-height:1.8;margin-bottom:10px">
+      客户：${esc(o.cust||'无')} ${o.custPhone||''}<br>
+      制单日期：${fmtDate(o.time)}<br>
+      业务员：${esc(o.handler||'无')}<br>
+      ${o.addr?`地址：${esc(o.addr)}<br>`:''}
+      ${o.signer?`签收人：${esc(o.signer)}<br>`:''}
+      ${o.remark?`备注：${esc(o.remark)}`:''}
+    </div>
+    <div class="ops">
+      <button style="background:#fff3e0;color:#ff9f1c" onclick="askRestoreSnap('${sp.id}','${esc(o.no)}')">复原到此版本</button>
+      <button style="background:#f5f5f5;color:#666" onclick="closeSnapModal()">关闭</button>
+    </div>`;
+  m.appendChild(box); document.body.appendChild(m);
+  m.onclick=function(e){ if(e.target===m) closeSnapModal(); };
+}
+function closeSnapModal(){ var m=document.getElementById('snapModal'); if(m){ if(m.remove)m.remove(); else if(m.parentNode)m.parentNode.removeChild(m); } }
+/* 复原到某个改前版本 */
+function askRestoreSnap(sid, no){
+  const sp = getSnapById(sid);
+  if(!sp){ toast('快照已过期，无法复原'); return; }
+  askConfirm(`确定把订单 ${no||''} 复原到这个改前版本吗？\n\n当前内容会被覆盖（金额 ¥${fmt(sp.order.payable)}、已付 ¥${fmt(sp.order.paid)}）。`, function(){
+    if(!restoreSnapshot(sid)){ toast('复原失败'); return; }
+    toast('✅ 已复原到改前版本');
+    try{ closeSnapModal(); }catch(e){}
+    try{ if(window._currentOrderId) viewOrder(window._currentOrderId); }catch(e){}
+    try{ renderOrderList(); }catch(e){}
+  }, '复原');
+}
+
+/* 这条日志能不能撤销：有快照且未被撤销过 */
+function canUndoLog(l){
+  if (!l || l.undone) return false;
+  if (!l.snapId) return false;
+  // 快照还在才能复原
+  return !!getSnapById(l.snapId);
+}
+/* 点「撤销此操作」*/
+function undoLog(logId){
+  const logs = DB.get(OPLOG_KEY, []);
+  const l = logs.find(x => x.id === logId);
+  if (!l) { toast('找不到这条记录'); return; }
+  if (l.undone) { toast('这条已经撤销过了'); return; }
+  if (!l.snapId || !getSnapById(l.snapId)) { toast('快照已过期，无法复原'); return; }
+  const what = (l.act||'') + (l.orderNo ? `（单号 ${l.orderNo}）` : '');
+  askConfirm(`确定撤销「${what}」吗？\n\n订单会恢复到这个操作之前的样子，误删的单子也会一并找回来。`, function(){
+    if (!restoreSnapshot(l.snapId)) { toast('复原失败'); return; }
+    // 标记这条已撤销，避免重复点
+    const ls = DB.get(OPLOG_KEY, []);
+    const li = ls.findIndex(x => x.id === logId);
+    if (li >= 0) { ls[li].undone = true; DB.set(OPLOG_KEY, ls); }
+    toast('✅ 已复原');
+    try { renderOrderList(); } catch(e){}
+    try { renderOpLog(); } catch(e){}
+    try { renderTrash(); } catch(e){}
+  }, '撤销');
+}
+
 function renderOpLog(){
   const el = document.getElementById('oplogList');
   if (!el) return;
@@ -1040,6 +1297,7 @@ function renderOpLog(){
       <div class="log-body">
         <div class="t"><span class="logtag lt-${k}">${({create:'开单',update:'修改',trash:'删除/恢复',backup:'备份',other:'其他'})[k]}</span>${esc(l.act||'')}</div>
         <div class="d">${extra}　<span style="color:#aaa">${esc(l.who || devFullName(l) || '—')}</span></div>
+        ${canUndoLog(l) ? `<div style="margin-top:5px"><button class="btn-undo" onclick="undoLog('${esc(l.id)}')">↩︎ 撤销此操作（复原）</button></div>` : ''}
       </div>
       <div class="log-time">${time}</div>
     </div>`;
@@ -1105,13 +1363,16 @@ function fmtDate(d) {
   return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`;
 }
 function genOrderNo() {
-  const prefix = document.getElementById('noPrefix').value || 'A';
+  const prefix = (document.getElementById('noPrefix')||{}).value || 'A';
   const orders = DB.get('orders', []);
-  const today = new Date();
+  // ★ 单号日期段跟随「开单日期」：选哪天，单号就是哪天的流水号
+  const tv = (document.getElementById('orderTime')||{}).value;
+  let base = tv ? new Date(tv) : new Date();
+  if (!base || isNaN(base.getTime())) base = new Date();
   const p = n => String(n).padStart(2,'0');
-  const dateStr = `${today.getFullYear()}${p(today.getMonth()+1)}${p(today.getDate())}`;
-  const todayOrders = orders.filter(o => (o.no||'').startsWith(prefix + dateStr));
-  return `${prefix}${dateStr}${String(todayOrders.length + 1).padStart(3,'0')}`;
+  const dateStr = `${base.getFullYear()}${p(base.getMonth()+1)}${p(base.getDate())}`;
+  const dayOrders = orders.filter(o => (o.no||'').startsWith(prefix + dateStr));
+  return `${prefix}${dateStr}${String(dayOrders.length + 1).padStart(3,'0')}`;
 }
 
 function showTab(tab) {
@@ -1229,6 +1490,9 @@ function init() {
   document.getElementById('cfgWkUrl').value = cfg.wkUrl;
   const _pu = document.getElementById('cfgPrintUrl'); if (_pu) _pu.value = cfg.printUrl || '';
   const _pm = document.getElementById('cfgPrintMedia'); if (_pm) _pm.value = cfg.printMedia || '80';
+  const _mw = document.getElementById('cfgMediaW'); if (_mw) _mw.value = cfg.mediaW || 80;
+  const _mh = document.getElementById('cfgMediaH'); if (_mh) _mh.value = cfg.mediaH || 200;
+  try { onPrintMediaChange(); } catch(e) {}
   const _pc = document.getElementById('cfgPrintCopies'); if (_pc) _pc.value = String(cfg.printCopies || 1);
   const _pp = document.getElementById('cfgPrinter'); if (_pp) _pp.value = cfg.printer || '';
   updateHostedTip();
@@ -1255,7 +1519,7 @@ function init() {
   purgeExpiredTrash(true);
 
   renderLayoutEditor();
-  try{ fillShopInputs(); fillPrintStyleInputs(); renderGoodsColEditor(); }catch(e){ console.warn('模板设置初始化', e); }
+  try{ fillShopInputs(); fillPrintStyleInputs(); renderGoodsColEditor(); renderExpCols(); }catch(e){ console.warn('模板设置初始化', e); }
   // ★ iOS：编辑器若仍空白（字段渲染中断），强制用默认排版再铺一次
   if (!document.getElementById('layoutEditor').innerHTML.trim()) {
     try { DB.remove('layout'); renderLayoutEditor(); } catch(e) {}
@@ -1711,6 +1975,7 @@ function saveOrder(){
   const order={
     id:state.editingOrderId||('o'+Date.now()),
     no:(_oldOrder && _oldOrder.no) ? _oldOrder.no : genOrderNo(),
+    createDate: _oldOrder ? (_oldOrder.createDate || fmtDate(new Date())) : fmtDate(new Date()),
     title:document.getElementById('docTitle').value,
     time:document.getElementById('orderTime').value||new Date().toISOString(),
     cust:custName,
@@ -1741,7 +2006,14 @@ function saveOrder(){
   DB.set('orders',orders);
   // 记录日志：新增 or 修改
   if (state.editingOrderId) {
-    logOp('修改订单', 'update', { orderNo: order.no, cust: order.cust, detail: `金额¥${fmt(order.payable)} 已付¥${fmt(order.paid)}` });
+    // ★ 改单：先把改之前的原单存快照，日志里可一键复原
+    const _lgId = 'log' + Date.now() + Math.random().toString(36).slice(2,6);
+    const _sid = _oldOrder ? saveSnapshot(_oldOrder, _lgId) : null;
+    logOp('修改订单', 'update', Object.assign({
+      id: _lgId,
+      orderNo: order.no, cust: order.cust,
+      detail: `金额¥${fmt(order.payable)} 已付¥${fmt(order.paid)}`
+    }, _sid ? { snapId: _sid } : {}));
   } else {
     logOp('新建订单', 'create', { orderNo: order.no, cust: order.cust, detail: `${order.goods.length}件商品 合计¥${fmt(order.payable)}` });
   }
@@ -1769,8 +2041,20 @@ function resetOrderForm(){
 
 function switchListF(btn){document.querySelectorAll('#page-list .seg button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.listFilter=btn.dataset.f;renderOrderList();}
 function onSearch(){
+  // 输入/选择时防抖自动搜（键盘输入、下拉选择好用）
   clearTimeout(window._st);
   window._st=setTimeout(function(){ renderOrderList(); },200);
+}
+/* 「确定」按钮：选完日期后点它立即筛选。
+   手机上的日期选择器经常不触发 change 事件，必须有个手动触发的入口 */
+function doSearch(){
+  clearTimeout(window._st);
+  renderOrderList();
+  const n = 0;
+  try {
+    const cnt = document.querySelectorAll('#orderList .card').length;
+    toast(cnt>0 ? `筛出 ${cnt} 张订单` : '没有符合条件的订单');
+  } catch(e) {}
 }
 function clearSearch(){
   const a=document.getElementById('listSearch'); if(a)a.value='';
@@ -1824,8 +2108,9 @@ function renderOrderList(){
       <div class="ord-row">
         <input type="checkbox" class="ord-check" data-id="${o.id}" ${state.selectedOrders.has(o.id)?'checked':''} onchange="toggleOrderSel('${o.id}',this)">
         <div class="body">
-          <div class="top"><span class="no">${esc(o.no)}</span><span class="date">${fmtDate(o.time)} ${devBadge(o)}</span></div>
-          <div class="meta">客户：${esc(o.cust)}
+          <div class="top"><span class="no">${esc(o.no)}</span><span class="date">制单 ${fmtDate(o.time)} ${devBadge(o)}</span></div>
+          ${o.createDate&&fmtDate(o.createDate)!==fmtDate(o.time)?`<div class="meta" style="font-size:11px;color:#888;margin-top:-2px">录入 ${fmtDate(o.createDate)}（补录）</div>`:''}
+          <div class="meta">${o.createDate&&fmtDate(o.createDate)!==fmtDate(o.time)?`录 ${fmtDate(o.createDate)}　`:''}客户：${esc(o.cust)}
 ${o.goods.map(g=>`  ${g.name} x${g.qty}${g.unit||''}`).join('\n')}
 合计：¥${fmt(o.payable)}　欠款：¥${fmt(o.debt)}${o.devName||o.devLabel?`\n开单设备：${esc(devFullName(o))}`:''}</div>
           ${o.printCount?`<div class="printcnt">已打印 ${o.printCount} 次</div>`:''}
@@ -1850,7 +2135,8 @@ function viewOrder(id){
   const o=orders.find(x=>x.id===id);if(!o)return;
   document.getElementById('detailBox').innerHTML=`
     <div class="card">
-      <div class="top"><span class="no">${esc(o.no)}</span><span class="date">${fmtDate(o.time)}</span></div>
+      <div class="top"><span class="no">${esc(o.no)}</span><span class="date">制单 ${fmtDate(o.time)}</span></div>
+      <div class="meta"><b>录入日期：</b>${esc(o.createDate?fmtDate(o.createDate):fmtDate(o.time))}${o.createDate&&fmtDate(o.createDate)!==fmtDate(o.time)?'　<span class="tag tag-yellow">补录单</span>':''}</div>
       <div class="meta">客户：${esc(o.cust)} ${o.custPhone||''}<br>地址：${esc(o.addr||'无')}<br>签收人：${esc(o.signer||'无')}<br>业务员：${esc(o.handler||'无')}<br>开单设备：<b>${esc(devFullName(o))}</b>${o.devId===getDeviceInfo().id?'　<span class="tag tag-green">本机</span>':'　<span class="tag tag-blue">异地设备</span>'}</div>
     </div>
     <div class="card detail">
@@ -1862,6 +2148,7 @@ function viewOrder(id){
     </div>
     ${o.sign?`<div class="card"><div class="meta">客户签字：</div><img src="${o.sign}" style="max-height:60px"></div>`:''}
   ${(o.returns&&o.returns.length)?`<div class="card"><div class="meta"><b>退货记录</b></div>${o.returns.map(function(r){return `<div class="line"><span>${fmtDate(r.time)} ${esc((r.goods||[]).map(function(g){return g.name+'x'+g.qty;}).join('、'))||'整单退'}</span><span style="color:#e34">-¥${fmt(r.amount)}</span></div>`;}).join('')}</div>`:''}
+    ${buildOrderHistoryCard(o)}
   <div class="card">
     <div class="ops">
       <button style="background:#e8f5e9;color:#2e7d32" onclick="openReturn('${o.id}')">退货</button>
@@ -1976,7 +2263,7 @@ function printOrder(){
   const id = onFormPage ? null : window._currentOrderId;
   if(!id){
     const goods=collectGoods();if(!goods.length){toast('请添加商品');return;}
-    const order={no:genOrderNo(),title:document.getElementById('docTitle').value,time:document.getElementById('orderTime').value,cust:document.getElementById('cust').value.trim(),custPhone:document.getElementById('custPhone').value.trim(),addr:document.getElementById('addr').value.trim(),signer:document.getElementById('signer').value.trim(),handler:document.getElementById('handler').value,goods,payable:+document.getElementById('payable').value||0,paid:+document.getElementById('paid').value||0,debt:(+document.getElementById('payable').value||0)-(+document.getElementById('paid').value||0),remark:document.getElementById('remark').value.trim(),sign:state.signData,...currentDevTag()};
+    const order={no:genOrderNo(),createDate:fmtDate(new Date()),title:document.getElementById('docTitle').value,time:document.getElementById('orderTime').value,cust:document.getElementById('cust').value.trim(),custPhone:document.getElementById('custPhone').value.trim(),addr:document.getElementById('addr').value.trim(),signer:document.getElementById('signer').value.trim(),handler:document.getElementById('handler').value,goods,payable:+document.getElementById('payable').value||0,paid:+document.getElementById('paid').value||0,debt:(+document.getElementById('payable').value||0)-(+document.getElementById('paid').value||0),remark:document.getElementById('remark').value.trim(),sign:state.signData,...currentDevTag()};
     renderPrint(order);
   }else{
     const orders=DB.get('orders',[]);const o=orders.find(x=>x.id===id);if(o)renderPrint(o);
@@ -2217,12 +2504,8 @@ function exportLocalBackupAt(ts){
   const list = DB.get(LOCAL_BACKUP_KEY, []);
   const e = list.find(x => x.t === ts);
   if (!e) return;
-  const blob = new Blob([JSON.stringify(e.snapshot, null, 2)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
   const d = new Date(ts); const p = n => String(n).padStart(2,'0');
-  a.download = `开单助手本机存档_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`;
-  a.click();
+  smartDownload(JSON.stringify(e.snapshot, null, 2), `开单助手本机存档_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`, 'application/json;charset=utf-8');
 }
 function exportLatestLocalBackup(){
   const list = DB.get(LOCAL_BACKUP_KEY, []);
@@ -2287,6 +2570,34 @@ function startAutoBackupTimer(){
 }
 function onAutoBackupTimerToggle(){ /* 由 saveAutoBackupCfg 重启定时器，占位保持 onchange 干净 */ }
 
+function onPrintMediaChange(){
+  const sel=document.getElementById('cfgPrintMedia');
+  const isCustom = sel && sel.value === 'custom';
+  const row=document.getElementById('customMediaRow');
+  const tip=document.getElementById('customMediaTip');
+  if(row) row.style.display = isCustom ? 'flex' : 'none';
+  if(tip) tip.style.display = isCustom ? 'block' : 'none';
+  saveCfg();
+}
+function applyMediaPreset(sel){
+  const v=sel.value; if(!v) return;
+  const [w,h]=v.split('x');
+  const mw=document.getElementById('cfgMediaW'); if(mw) mw.value=w;
+  const mh=document.getElementById('cfgMediaH'); if(mh) mh.value=h;
+  const ms=document.getElementById('cfgPrintMedia'); if(ms) ms.value='custom';
+  onPrintMediaChange();
+  toast(`已设为 ${w} x ${h} mm`);
+  sel.value='';
+}
+/* 实际下发给服务端的纸张值：自定义时拼成 Custom.80x200mm */
+function getPrintMedia(){
+  const cfg=DB.get('cfg',{})||{};
+  if(cfg.printMedia==='custom'){
+    const w=+cfg.mediaW||80, h=+cfg.mediaH||200;
+    return `Custom.${w}x${h}mm`;
+  }
+  return cfg.printMedia||'80';
+}
 function saveCfg(){
   try{
     const cfg=DB.get('cfg',{});
@@ -2296,6 +2607,8 @@ function saveCfg(){
     cfg.wkUrl=val('cfgWkUrl');
     cfg.printUrl=val('cfgPrintUrl');
     cfg.printMedia=(g('cfgPrintMedia')?g('cfgPrintMedia').value:'80')||'80';
+    cfg.mediaW=+(g('cfgMediaW')?g('cfgMediaW').value:0)||0;
+    cfg.mediaH=+(g('cfgMediaH')?g('cfgMediaH').value:0)||0;
     cfg.printCopies=+(g('cfgPrintCopies')?g('cfgPrintCopies').value:1)||1;
     cfg.printer=val('cfgPrinter');
     cfg.showSign=chk('cfgShowSign');
@@ -2353,7 +2666,7 @@ function renderWithTemplate(o, tpl){
 const FIELD_DEFS = [
   { key: 'title', label: '单据标题' },
   { key: 'no', label: '单号' },
-  { key: 'date', label: '日期' },
+  { key: 'date', label: '制单日期' },
   { key: 'cust', label: '客户名称' },
   { key: 'custPhone', label: '客户电话' },
   { key: 'addr', label: '地址' },
@@ -2373,6 +2686,7 @@ const FIELD_DEFS = [
   { key: 'qrcode', label: '单据二维码' },
   { key: 'custNo', label: '客户编号' },
   { key: 'totalBig', label: '合计大写' },
+  { key: 'createDate', label: '录入日期' },
   { key: 'printTime', label: '打印时间' },
   { key: 'printCount', label: '打印次数' }
 ];
@@ -2478,7 +2792,10 @@ function saveGoodsCols(){
     cols.push({ key:r.dataset.key, show:r.querySelector('.gc-show').checked, w:+r.querySelector('.gc-w').value||1, align:al?al.value:'left' });
   });
   const sumEl=document.getElementById('tplShowSum');
-  DB.set('goodsCols',{ cols:cols, showSum: sumEl?sumEl.checked:true });
+  const _prev=DB.get('goodsCols',{})||{};
+  const quEl=document.getElementById('tplShowQtyUnit');
+  DB.set('goodsCols',{ cols:cols, showSum: sumEl?sumEl.checked:true,
+    showQtyUnit: quEl ? !!quEl.checked : (typeof _prev.showQtyUnit==='boolean'?_prev.showQtyUnit:false) });
 }
 function setAllAlign(a){
   const g=getGoodsCols();
@@ -2499,7 +2816,7 @@ function renderGoodsColEditor(){
       <label class="switch" style="margin:0"><input type="checkbox" class="gc-show" ${c.show?'checked':''} onchange="saveGoodsCols()"><span class="slider"></span></label>
       <span style="flex:1;font-size:13px">${def.label}</span>
       <span style="font-size:11px;color:#888">宽</span>
-      <input type="number" class="gc-w" min="1" max="9" value="${c.w}" oninput="saveGoodsCols()" style="width:46px;height:30px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:12px;text-align:center">
+      <input type="number" class="gc-w" min="1" max="20" value="${c.w}" oninput="saveGoodsCols()" title="格数：数值越大这列越宽" style="width:52px;height:30px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:12px;text-align:center">
       <select class="gc-align" onchange="saveGoodsCols()" style="height:30px;border:1px solid #ddd;border-radius:6px;font-size:12px;padding:0 4px">
         <option value="left" ${c.align==='left'?'selected':''}>左</option>
         <option value="center" ${c.align==='center'?'selected':''}>中</option>
@@ -2592,11 +2909,8 @@ function renderLayoutEditor(){
         </select>
         <div style="display:flex;gap:4px;margin-top:4px">
           <select onchange="setField(${ri},${fi},'span',+this.value)" style="padding:3px;font-size:12px">
-            <option value="3" ${f.span===3?'selected':''}>3格</option>
-            <option value="4" ${f.span===4?'selected':''}>4格</option>
-            <option value="6" ${f.span===6?'selected':''}>6格</option>
-            <option value="8" ${f.span===8?'selected':''}>8格</option>
-            <option value="12" ${f.span===12?'selected':''}>整行</option>
+            ${[1,2,3,4,5,6,7,8].map(function(n){return `<option value="${n}" ${(+f.span||12)===n?'selected':''}>${n}格</option>`;}).join('')}
+            <option value="12" ${(+f.span||12)>=9?'selected':''}>整行</option>
           </select>
           <select onchange="setField(${ri},${fi},'align',this.value)" style="padding:3px;font-size:12px">
             <option value="left" ${f.align==='left'?'selected':''}>左</option>
@@ -2716,7 +3030,8 @@ function buildFieldValue(key,o){
   switch(key){
     case 'title':return esc(o.title||'销售单');
     case 'no':return esc(o.no||'');
-    case 'date':return fmtDate(o.time);
+    case 'date':return fmtDate(o.time);           // 制单日期 = 开单日期
+    case 'createDate':return fmtDate(o.createDate || o.time); // 录入日期（实际哪天录的单）
     case 'cust':return esc(o.cust||'');
     case 'custPhone':return esc(o.custPhone||'');
     case 'addr':return esc(o.addr||'');
@@ -2787,10 +3102,13 @@ function buildGoodsBlock(o){
   }
   // 表格线版式
   const alignOf=function(c){ return (c.align==='center'||c.align==='right') ? c.align : 'left'; };
+  // 按权重比例分配列宽：总权重 → 100%，这样调"格数"才真的看得出变化
+  const _wOf=function(c){ return Math.max(1, Math.min(20, +c.w || 1)); };
+  const _wSum=cols.reduce(function(a,c){ return a + _wOf(c); }, 0) || 1;
   const ths=cols.map(c=>{
     const def=GOODS_COLS.find(x=>x.key===c.key)||{label:c.key};
-    const w=Math.max(1,Math.min(9,c.w||1));
-    return `<th style="width:${w*10}%;text-align:${alignOf(c)}">${def.label}</th>`;
+    const pct=(_wOf(c)/_wSum*100).toFixed(3);
+    return `<th style="width:${pct}%;text-align:${alignOf(c)}">${def.label}</th>`;
   }).join('');
   const rows=goods.map((gd,i)=>`<tr style="height:${rh}px">${cols.map(c=>{
     return `<td style="text-align:${alignOf(c)}">${cellVal(c.key,gd,i)}</td>`;
@@ -2960,7 +3278,7 @@ function testPrint(){
   fetch(ep, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ test: true, printer: (DB.get('cfg',{}).printer||''),
-      media: (DB.get('cfg',{}).printMedia||'80'), copies: 1 })
+      media: getPrintMedia(), copies: 1 })
   }).then(r => r.json()).then(d => {
     toast(d && d.ok ? '✅ 测试页已发出：' + (d.msg||'') : '❌ ' + ((d && d.msg) || '打印失败'));
   }).catch(() => toast('连不上玩客云，检查地址与网络'));
@@ -3025,7 +3343,7 @@ function doPrint() {
         orders: list,
         html: (htmls && htmls.length === list.length) ? htmls : null,
         printer: cfg.printer || '',
-        media: cfg.printMedia || '80',
+        media: getPrintMedia(),
         copies: +cfg.printCopies || 1,
         title: (o && o.title) || '销售单'
       })
@@ -3186,7 +3504,8 @@ function openCustOrders(custName) {
   body.innerHTML = `<h3 style="margin:0 0 10px">客户：${esc(custName)}（${orders.length}单）</h3>` + devLine +
     orders.map(o => `
       <div class="card clickable" onclick="viewOrder('${o.id}')">
-        <div class="top"><span class="no">${esc(o.no)}</span><span class="date">${fmtDate(o.time)} ${devBadge(o)}</span></div>
+        <div class="top"><span class="no">${esc(o.no)}</span><span class="date">制单 ${fmtDate(o.time)} ${devBadge(o)}</span></div>
+        ${o.createDate&&fmtDate(o.createDate)!==fmtDate(o.time)?`<div class="meta" style="font-size:11px;color:#888">录入 ${fmtDate(o.createDate)}</div>`:''}
         <div class="meta">合计：¥${fmt(o.payable)}　已付：¥${fmt(o.paid)}　欠款：<span style="color:#e34">¥${fmt(o.debt)}</span><br>开单：${esc(devFullName(o))}</div>
       </div>
     `).join('');
@@ -3208,22 +3527,748 @@ function openGoodsOrders(goodsName) {
     `).join('');
   showTab('statdetail');
 }
-function exportCsv() {
-  const orders = getFilteredOrders();
-  const scope = document.getElementById('expScope').value;
-  let rows = [['单号','日期','客户','商品','数量','单价','金额','已付','欠款','开单设备','设备ID','备注']];
-  orders.forEach(o => {
-    o.goods.forEach(g => {
-      rows.push([o.no, fmtDate(o.time), o.cust, g.name, g.qty, g.price, fmt(g.qty*g.price), o.paid, o.debt, devFullName(o), o.devId||'', o.remark]);
-    });
+/* 导出范围：选「指定客户」时显示客户下拉 */
+function onExpScopeChange(){
+  const sc=document.getElementById('expScope');
+  const row=document.getElementById('expCustRow');
+  if(!sc||!row) return;
+  const _cfg=getExpCfg(); _cfg.expScope=sc.value; DB.set('expCfg',_cfg);
+  row.style.display = (sc.value==='cust') ? 'block' : 'none';
+  if(sc.value==='cust') fillExpCustSelect();
+  saveExpCfg();
+}
+function fillExpCustSelect(){
+  const sel=document.getElementById('expCust');
+  if(!sel) return;
+  const orders=DB.get('orders',[]);
+  // 客户库 + 历史订单里出现过的客户，都列出来
+  const names=new Set();
+  (DB.get('customers',[])||[]).forEach(c=>{ if(c&&c.name) names.add(c.name); });
+  orders.forEach(o=>{ if(o&&o.cust) names.add(o.cust); });
+  const arr=Array.from(names).sort((a,b)=>a.localeCompare(b,'zh'));
+  const cur=DB.get('expCfg',{}).expCust||'';
+  sel.innerHTML = arr.map(n=>`<option value="${esc(n)}" ${n===cur?'selected':''}>${esc(n)}</option>`).join('')
+    || '<option value="">（还没有客户）</option>';
+  onExpCustChange();
+}
+function onExpCustChange(){
+  const sel=document.getElementById('expCust');
+  const info=document.getElementById('expCustInfo');
+  if(!sel||!info) return;
+  const name=sel.value;
+  const cfg=getExpCfg(); cfg.expCust=name; DB.set('expCfg',cfg);
+  if(!name){ info.innerHTML=''; return; }
+  const b=custBalance(name);
+  info.innerHTML = `订单 <b>${b.count}</b> 张 · 应收 ¥${fmt(b.debt)} · 已收 ¥${fmt(b.got)} · <b style="color:#e34">尚欠 ¥${fmt(b.left)}</b>`;
+}
+/* 对账单 sheet：某客户的送货 + 收款流水，滚动余额 */
+function buildStatementSheet(custName){
+  const orders=DB.get('orders',[]).filter(o=>o.cust===custName).sort((a,b)=>new Date(a.time)-new Date(b.time));
+  const ps=(DB.get('payments',[])||[]).filter(p=>p.cust===custName).sort((a,b)=>new Date(a.time)-new Date(b.time));
+  const bal=custBalance(custName);
+  const rows=[['日期','类型','单号/方式','金额','滚动余额','商品明细','备注']];
+  const list=[...orders.map(o=>({t:o.time,kind:'送货',no:o.no,amt:+o.payable||0,
+              note:(o.goods||[]).map(g=>`${g.name}x${g.qty}${g.unit||''}`).join(' '), remark:o.remark||''})),
+            ...ps.map(p=>({t:p.time,kind:'收款',no:p.way||'',amt:-(+p.amount||0),
+              note:p.orderId?'已冲抵订单':'', remark:p.note||''}))]
+           .sort((a,b)=>new Date(a.t)-new Date(b.t));
+  let run=0;
+  list.forEach(r=>{
+    run+=r.amt;
+    rows.push([fmtDate(r.t), r.kind, r.no, fmt(r.amt), fmt(run), r.note, r.remark]);
   });
-  const csv = '\ufeff' + rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `订单导出_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  toast('CSV已导出');
+  rows.push([]);
+  rows.push(['合计','','','','',`送货 ¥${fmt(bal.debt)}　收款 ¥${fmt(bal.got)}`,`尚欠 ¥${fmt(bal.left)}`]);
+  return { name:'对账_'+String(custName).slice(0,20), rows:rows, widths:[12,8,14,12,14,34,18] };
+}
+
+/* 按作用域取订单 */
+function getExportOrders(scope){
+  let orders;
+  if (scope === 'cust') {
+    // 指定客户：只出这一个客户的单
+    const name = (document.getElementById('expCust')||{}).value || (DB.get('expCfg',{})||{}).expCust || '';
+    orders = DB.get('orders', []).filter(o => (o.cust||'') === name);
+    return orders.slice().sort((a,b)=> new Date(b.time) - new Date(a.time));
+  }
+  if (scope === 'filtered') {
+    orders = getFilteredOrders();          // 用订单页的搜索/筛选条件
+  } else {
+    orders = DB.get('orders', []);
+    const now = new Date();
+    const p2 = n => String(n).padStart(2,'0');
+    if (scope === 'today') {
+      const d = `${now.getFullYear()}-${p2(now.getMonth()+1)}-${p2(now.getDate())}`;
+      orders = orders.filter(o => fmtDate(o.time) === d);
+    } else if (scope === 'thismonth') {
+      const ym = `${now.getFullYear()}-${p2(now.getMonth()+1)}`;
+      orders = orders.filter(o => (fmtDate(o.time)||'').slice(0,7) === ym);
+    } else if (scope === 'lastmonth') {
+      let y = now.getFullYear(), m = now.getMonth();
+      if (m === 0) { y -= 1; m = 12; }
+      const ym = `${y}-${p2(m)}`;
+      orders = orders.filter(o => (fmtDate(o.time)||'').slice(0,7) === ym);
+    }
+  }
+  return orders.slice().sort((a,b)=> new Date(b.time) - new Date(a.time));
+}
+/* 组装所有报表 sheet */
+function buildAllSheets(orders){
+  const cfg = getExpCfg();
+  const sheets = [];
+  const scope = (document.getElementById('expScope')||{}).value || 'all';
+  // 指定客户时：对账单放第一个，方便直接给客户看
+  if (scope === 'cust') {
+    const name = (document.getElementById('expCust')||{}).value || cfg.expCust || '';
+    if (name) sheets.push(buildStatementSheet(name));
+  }
+  // 1) 订单明细
+  const d = buildExpRows(orders, cfg);
+  if (d.rows.length) sheets.push({ name: (cfg.mode==='order'?'订单一览':'订单明细'), rows: [d.head].concat(d.rows), widths: d.widths });
+  // 2) 客户欠款
+  sheets.push(buildCustDebtSheet(orders));
+  // 3) 商品销量
+  sheets.push(buildSalesSheet(orders));
+  // 4) 业务员业绩
+  sheets.push(buildStaffSheet(orders));
+  // 5) 日报
+  sheets.push(buildDailySheet(orders));
+  // 6) 月报
+  sheets.push(buildMonthlySheet(orders));
+  return sheets.filter(x=>x && x.rows && x.rows.length>1);
+}
+function buildCustDebtSheet(orders){
+  const map={};
+  orders.forEach(o=>{
+    const n=o.cust||'(未填客户)';
+    if(!map[n]) map[n]={orders:0,sales:0,debt:0,paid:0,last:''};
+    const m=map[n]; m.orders++; m.sales+=(+o.payable||0); m.debt+=(+o.debt||0); m.paid+=(+o.paid||0);
+    const d=fmtDate(o.time); if(!m.last||d>m.last) m.last=d;
+  });
+  const payMap={};
+  (DB.get('payments',[])||[]).forEach(p=>{ payMap[p.cust]=(payMap[p.cust]||0)+(+p.amount||0); });
+  const arr=Object.entries(map).sort((a,b)=>b[1].debt-a[1].debt);
+  const rows=[['客户','订单数','累计应收','已收(订单内)','通用收款','尚欠','最后一单']];
+  arr.forEach(([name,v])=>rows.push([name,v.orders,fmt(v.sales),fmt(v.paid),fmt(payMap[name]||0),fmt(v.debt),v.last]));
+  return { name:'客户欠款', rows:rows, widths:[20,10,14,14,14,14,14] };
+}
+function buildSalesSheet(orders){
+  const map={};
+  orders.forEach(o=>(o.goods||[]).forEach(g=>{
+    if(!g||!g.name) return;
+    if(!map[g.name]) map[g.name]={qty:0,amt:0,cost:0,times:0,unit:g.unit||''};
+    const m=map[g.name];
+    m.qty+=(+g.qty||0); m.amt+=(+g.qty||0)*(+g.price||0); m.cost+=(+g.qty||0)*goodsCost(g); m.times++;
+  }));
+  const arr=Object.entries(map).sort((a,b)=>b[1].amt-a[1].amt);
+  const rows=[['商品','单位','总销量','总销售额','总成本','毛利','出现单数','均价']];
+  arr.forEach(([name,v])=>rows.push([name,v.unit,fmt(v.qty),fmt(v.amt),fmt(v.cost),fmt(v.amt-v.cost),v.times,v.qty?fmt(v.amt/v.qty):'0']));
+  return { name:'商品销量', rows:rows, widths:[20,8,12,14,14,14,12,12] };
+}
+function buildStaffSheet(orders){
+  const map={};
+  orders.forEach(o=>{
+    const n=o.handler||'(未填业务员)';
+    if(!map[n]) map[n]={orders:0,sales:0,debt:0,custs:{}};
+    const m=map[n]; m.orders++; m.sales+=(+o.payable||0); m.debt+=(+o.debt||0);
+    if(o.cust) m.custs[o.cust]=1;
+  });
+  const arr=Object.entries(map).sort((a,b)=>b[1].sales-a[1].sales);
+  const rows=[['业务员','开单数','销售额','欠款','客户数']];
+  arr.forEach(([name,v])=>rows.push([name,v.orders,fmt(v.sales),fmt(v.debt),Object.keys(v.custs).length]));
+  return { name:'业务员业绩', rows:rows, widths:[16,12,14,14,12] };
+}
+function buildDailySheet(orders){
+  const map={};
+  orders.forEach(o=>{
+    const d=fmtDate(o.time);
+    if(!map[d]) map[d]={orders:0,sales:0,paid:0,debt:0};
+    const m=map[d]; m.orders++; m.sales+=(+o.payable||0); m.paid+=(+o.paid||0); m.debt+=(+o.debt||0);
+  });
+  // 当天收款
+  const payMap={};
+  (DB.get('payments',[])||[]).forEach(p=>{ const d=fmtDate(p.time); payMap[d]=(payMap[d]||0)+(+p.amount||0); });
+  const arr=Object.entries(map).sort((a,b)=>a[0]<b[0]?1:-1);
+  const rows=[['日期','单数','销售额','已收','欠款','当日收款']];
+  arr.forEach(([d,v])=>rows.push([d,v.orders,fmt(v.sales),fmt(v.paid),fmt(v.debt),fmt(payMap[d]||0)]));
+  return { name:'日报', rows:rows, widths:[14,10,14,14,14,14] };
+}
+function buildMonthlySheet(orders){
+  const map={};
+  orders.forEach(o=>{
+    const ym=(fmtDate(o.time)||'').slice(0,7);
+    if(!ym) return;
+    if(!map[ym]) map[ym]={orders:0,sales:0,paid:0,debt:0};
+    const m=map[ym]; m.orders++; m.sales+=(+o.payable||0); m.paid+=(+o.paid||0); m.debt+=(+o.debt||0);
+  });
+  const arr=Object.entries(map).sort((a,b)=>a[0]<b[0]?1:-1);
+  const rows=[['月份','单数','销售额','已收','欠款']];
+  arr.forEach(([ym,v])=>rows.push([ym,v.orders,fmt(v.sales),fmt(v.paid),fmt(v.debt)]));
+  return { name:'月报', rows:rows, widths:[12,10,14,14,14] };
+}
+
+function exportCsv() {
+  const scopeEl = document.getElementById('expScope');
+  const scope = scopeEl ? scopeEl.value : 'all';
+  let orders = getExportOrders(scope);
+  if (!orders.length) { toast('没有可导出的订单'); return; }
+  const cfg = getExpCfg();
+  const dateStr = new Date().toISOString().slice(0,10);
+
+  // ---- Excel：多 sheet 一次出齐 ----
+  if (cfg.fmt === 'xlsx') {
+    try {
+      const sheets = buildAllSheets(orders);
+      if (!sheets.length) { toast('没有可导出的数据'); return; }
+      const blob = XLSX.build(sheets);
+      smartBlobDownload(blob, `开单助手_${dateStr}.xlsx`);
+      toast('✅ Excel 已导出（含 ' + sheets.length + ' 个表）');
+      return;
+    } catch(e) {
+      toast('Excel 生成失败，改用 CSV');
+    }
+  }
+  // ---- CSV：按当前汇总页导出对应报表 ----
+  const scopeNow = (document.getElementById('expScope')||{}).value || 'all';
+  if (scopeNow === 'cust') {
+    const nm = (document.getElementById('expCust')||{}).value || cfg.expCust || '';
+    if (nm) { downloadCsv(buildStatementSheet(nm).rows, `对账单_${esc(nm)}_${dateStr}.csv`); return; }
+  }
+  const sub = state.statSub || 'overview';
+  if (sub === 'custdebt') { downloadCsv(buildCustDebtSheet(orders).rows, `客户欠款汇总_${dateStr}.csv`); return; }
+  if (sub === 'sales')    { downloadCsv(buildSalesSheet(orders).rows,   `商品销量汇总_${dateStr}.csv`); return; }
+  const d = buildExpRows(orders, cfg);
+  downloadCsv([d.head].concat(d.rows), `订单导出_${dateStr}.csv`);
+}
+
+/* Blob 直接下载（xlsx 用，走同一套降级） */
+function smartBlobDownload(blob, filename){
+  // ★ file:// 下浏览器禁止下载，别再静默失败，直接告诉用户怎么办
+  if (isFileProtocol()) { showFileBlockedTip(filename); return false; }
+  if (isWeChat()) { showFileBlockedTip(filename); return false; }
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display='none'; a.rel='noopener';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){
+      try{ URL.revokeObjectURL(url); }catch(e){}
+      if(a.remove)a.remove(); else if(a.parentNode)a.parentNode.removeChild(a);
+    }, 60000);
+    toast('已导出：' + filename);
+    return true;
+  } catch(e){
+    showFileBlockedTip(filename);
+    return false;
+  }
+}
+/* 下载被拦时的引导弹窗（二进制文件没法粘贴，只能引导） */
+function showFileBlockedTip(filename){
+  const old=document.getElementById('fbTipModal'); if(old&&old.remove) old.remove();
+  const m=document.createElement('div'); m.id='fbTipModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:910;display:flex;align-items:center;justify-content:center;padding:14px';
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;width:100%;max-width:380px;border-radius:12px;padding:16px;max-height:88%;overflow:auto';
+  const isFile = isFileProtocol();
+  box.innerHTML=`
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px">❌ ${isFile?'本地打开模式下无法下载':'下载被浏览器拦住'}</div>
+    <div style="font-size:13px;color:#555;line-height:1.8;margin-bottom:12px">
+      ${isFile
+        ? '你现在是<b>双击本地文件</b>打开的（地址栏 <code>file://</code>），浏览器禁止这种模式下存文件，所以导出会失败。<br><br><b>两种解决办法：</b>'
+        : '当前浏览器环境不允许下载文件。'}
+    </div>
+    ${isFile?`<div style="font-size:13px;line-height:1.9;background:#f7f9fc;padding:10px;border-radius:8px;margin-bottom:12px">
+      <b>① 起个本地服务器（推荐，30 秒）</b><br>
+      在本文件所在文件夹按住 Shift+右键 →「在此处打开命令行」，输入：<br>
+      <code style="display:block;background:#222;color:#7CFC98;padding:8px;border-radius:6px;margin:6px 0;font-size:12px">python -m http.server 8080</code>
+      然后浏览器打开 <b>http://localhost:8080</b> —— 这样下载就正常了。<br><br>
+      <b>② 传到网上用网址打开</b><br>
+      把 index.html 传到 GitHub 仓库，用 https:// 网址打开，下载完全正常，手机也能用。
+    </div>`:''}
+    <div style="font-size:12px;color:#888;margin-bottom:12px">文件名：${esc(filename)}</div>
+    <button style="width:100%;padding:12px;border:none;background:#2b7de9;color:#fff;border-radius:8px;font-size:15px" onclick="(function(){var m=document.getElementById('fbTipModal');if(m){if(m.remove)m.remove();else if(m.parentNode)m.parentNode.removeChild(m);}})()">知道了</button>`;
+  m.appendChild(box); document.body.appendChild(m);
+  m.onclick=function(e){ if(e.target===m){ if(m.remove)m.remove(); else if(m.parentNode)m.parentNode.removeChild(m); } };
+}
+
+
+/* 导出：客户欠款汇总（客户维度一行一个） */
+function exportCustDebtCsv(orders){ downloadCsv(buildCustDebtSheet(orders).rows, `客户欠款汇总_${new Date().toISOString().slice(0,10)}.csv`); }
+/* 导出：商品销量汇总 */
+function exportSalesCsv(orders){ downloadCsv(buildSalesSheet(orders).rows, `商品销量汇总_${new Date().toISOString().slice(0,10)}.csv`); }
+/* 统一的 CSV 下载（带 BOM，Excel 打开不乱码） */
+/* ============ 环境检测 ============ */
+function isWeChat(){ return /MicroMessenger/i.test(navigator.userAgent||''); }
+function isiOS(){
+  const ua = navigator.userAgent || '';
+  return /iP(hone|pad|od)/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function canDownloadAttr(){
+  try { return 'download' in document.createElement('a'); } catch(e){ return false; }
+}
+/* 是不是双击本地 HTML 打开的（file://）——这种模式下浏览器禁止下载 */
+function isFileProtocol(){
+  try { return (location.protocol === 'file:'); } catch(e){ return false; }
+}
+
+/* ============ 兜底弹窗：显示内容供复制/分享 ============ */
+function showSaveFallback(content, filename, mime, reason){
+  const old = document.getElementById('saveFbModal');
+  if (old && old.remove) old.remove();
+  const m = document.createElement('div'); m.id = 'saveFbModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:flex;align-items:center;justify-content:center;padding:14px';
+  const box = document.createElement('div');
+  const tooBig = content.length > 200000;
+  box.style.cssText = 'background:#fff;width:100%;max-width:380px;border-radius:12px;padding:14px;max-height:88%;display:flex;flex-direction:column';
+  box.innerHTML = `
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">下载被浏览器拦了</div>
+    <div style="font-size:12px;color:#666;line-height:1.7;margin-bottom:10px">
+      ${reason === 'file'
+        ? '⚠️ 你是<b>双击本地 HTML 文件</b>打开的（地址 <code>file://</code>），浏览器禁止这种模式下存文件。<br><b>建议：用网址打开或起本地服务器</b>，下载就正常了。<br>急着要数据的话，用下面的「复制全部」。'
+        : (isWeChat() ? '⚠️ 当前是<b>微信内置浏览器</b>，它禁止直接下载。<br>请点右上角「···」→「在浏览器打开」再导出。'
+                      : (isiOS() ? '苹果手机建议用 Safari 打开本页再导出，或用下面的方式保存。' : '可以试试下面的方式保存。'))}
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px">文件名：${esc(filename)}</div>
+    <textarea id="fbText" readonly style="flex:1;min-height:180px;width:100%;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:12px;font-family:monospace;resize:none"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="fbCopy" style="flex:1;min-width:100px;padding:12px;border:none;background:#2b7de9;color:#fff;border-radius:8px;font-size:14px;font-weight:600">复制全部</button>
+      <button id="fbShare" style="flex:1;min-width:100px;padding:12px;border:none;background:#2e7d32;color:#fff;border-radius:8px;font-size:14px;font-weight:600">分享/发送</button>
+      <button id="fbClose" style="flex:1;min-width:100px;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;font-size:14px;color:#666">关闭</button>
+    </div>
+    <div style="font-size:11px;color:#999;margin-top:8px;line-height:1.6">
+      复制后可粘贴到微信收藏、备忘录；也可粘到电脑记事本另存为对应格式。
+    </div>`;
+  m.appendChild(box); document.body.appendChild(m);
+  // ★ 内容用 .value 直接赋值，避免大文本走 innerHTML 转义导致卡死
+  try {
+    const ta = box.querySelector('#fbText');
+    if (ta) ta.value = tooBig ? content.slice(0, 200000) : content;
+  } catch(e) {}
+  const close = function(){ if(m.remove)m.remove(); else if(m.parentNode)m.parentNode.removeChild(m); };
+  box.querySelector('#fbClose').onclick = close;
+  m.onclick = function(e){ if(e.target===m) close(); };
+  box.querySelector('#fbCopy').onclick = function(){
+    const ta = box.querySelector('#fbText');
+    let ok = false;
+    try {
+      ta.removeAttribute('readonly'); ta.focus(); ta.select(); ta.setSelectionRange(0, 999999);
+      ok = document.execCommand('copy');
+      ta.setAttribute('readonly','readonly');
+    } catch(e){}
+    if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(content)
+        .then(function(){ toast('已复制到剪贴板'); },
+              function(){ toast('复制失败，请手动长按全选'); });
+      return;
+    }
+    toast(ok ? '已复制到剪贴板' : '请手动长按全选复制');
+  };
+  box.querySelector('#fbShare').onclick = function(){
+    try {
+      const blob = new Blob([content], {type: mime || 'text/plain;charset=utf-8'});
+      const file = new File([blob], filename, {type: mime || 'text/plain;charset=utf-8'});
+      if (navigator.canShare && navigator.canShare({files:[file]})) {
+        navigator.share({ files:[file], title: filename })
+          .then(function(){ toast('已调用分享'); }, function(){});
+        return;
+      }
+      if (navigator.share) {
+        navigator.share({ title: filename, text: content.slice(0, 5000) })
+          .then(function(){}, function(){});
+        return;
+      }
+    } catch(e){}
+    toast('该浏览器不支持分享，请用「复制全部」');
+  };
+}
+
+/* ============ 主下载：多级降级 ============ */
+function smartDownload(content, filename, mime){
+  mime = mime || 'text/plain;charset=utf-8';
+  const tryBlob = function(){
+    try {
+      const blob = new Blob([content], {type: mime});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.style.display = 'none'; a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){
+        try{ URL.revokeObjectURL(url); }catch(e){}
+        if(a.remove)a.remove(); else if(a.parentNode)a.parentNode.removeChild(a);
+      }, 60000);
+      return true;
+    } catch(e){ return false; }
+  };
+  const tryDataUri = function(){
+    try {
+      const uri = 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(content);
+      const w = window.open(uri, '_blank');
+      if (w) { toast('已在新窗口打开，可长按/分享保存'); return true; }
+    } catch(e){}
+    return false;
+  };
+  if (isWeChat()) { showSaveFallback(content, filename, mime); return; }
+  if (isFileProtocol()) { showSaveFallback(content, filename, mime, 'file'); return; }
+  if (canDownloadAttr() && !isiOS()) {
+    if (tryBlob()) { toast('已导出：' + filename); return; }
+  }
+  if (isiOS()) {
+    if (tryDataUri()) return;
+    if (tryBlob()) { toast('已导出：' + filename); return; }
+    showSaveFallback(content, filename, mime); return;
+  }
+  if (tryBlob()) { toast('已导出：' + filename); return; }
+  if (tryDataUri()) return;
+  showSaveFallback(content, filename, mime);
+}
+
+function downloadCsv(rows, filename){
+  const csv = '\ufeff' + rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  smartDownload(csv, filename, 'text/csv;charset=utf-8');
+}
+
+
+/* ============ 纯 JS 生成 .xlsx（零依赖，离线可用） ============
+   xlsx 本质是一个 zip 包，里面装几个 xml 文件。
+   这里用「不压缩(store)」方式写 zip，自己算 CRC32，不需要任何第三方库。 */
+var XLSX = (function(){
+  // ---- CRC32 ----
+  var crcTable = (function(){
+    var t = new Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(buf){
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  // ---- 字符串转 UTF-8 字节 ----
+  function utf8(str){
+    var out = [], i = 0, c;
+    str = String(str);
+    while (i < str.length) {
+      c = str.charCodeAt(i++);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) { out.push(0xC0 | (c >> 6), 0x80 | (c & 63)); }
+      else if (c >= 0xD800 && c <= 0xDBFF && i < str.length) {
+        var c2 = str.charCodeAt(i++);
+        var cp = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00);
+        out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+      } else {
+        out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      }
+    }
+    return out;
+  }
+  // ---- zip 打包（store 模式） ----
+  function zip(files){
+    var chunks = [], central = [], offset = 0;
+    var now = new Date();
+    var dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (Math.floor(now.getSeconds() / 2))) & 0xFFFF;
+    var dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+    files.forEach(function(f){
+      var nameBytes = utf8(f.name);
+      var data = f.data;                     // Uint8Array
+      var crc = crc32(data);
+      var size = data.length;
+
+      var local = [];
+      local.push(0x50,0x4B,0x03,0x04, 0x14,0x00, 0x00,0x00, 0x00,0x00);
+      local.push(dosTime & 0xFF, dosTime >> 8, dosDate & 0xFF, dosDate >> 8);
+      var l1 = local.length;
+      local.push(0,0,0,0, 0,0,0,0, 0,0,0,0);   // crc + sizes 占位
+      local.push(nameBytes.length & 0xFF, nameBytes.length >> 8, 0, 0);
+      nameBytes.forEach(function(b){ local.push(b); });
+      var lh = local;
+      // 填 crc/size
+      lh[l1] = crc & 0xFF; lh[l1+1] = (crc >> 8) & 0xFF; lh[l1+2] = (crc >> 16) & 0xFF; lh[l1+3] = (crc >>> 24) & 0xFF;
+      lh[l1+4] = size & 0xFF; lh[l1+5] = (size >> 8) & 0xFF; lh[l1+6] = (size >> 16) & 0xFF; lh[l1+7] = (size >>> 24) & 0xFF;
+      lh[l1+8] = lh[l1+4]; lh[l1+9] = lh[l1+5]; lh[l1+10] = lh[l1+6]; lh[l1+11] = lh[l1+7];
+
+      var lb = new Uint8Array(lh);
+      var entry = new Uint8Array(lb.length + size);
+      entry.set(lb, 0); entry.set(data, lb.length);
+      chunks.push(entry);
+
+      // central directory
+      var cd = [];
+      cd.push(0x50,0x4B,0x01,0x02, 0x14,0x00, 0x14,0x00, 0x00,0x00, 0x00,0x00);
+      cd.push(dosTime & 0xFF, dosTime >> 8, dosDate & 0xFF, dosDate >> 8);
+      cd.push(crc & 0xFF, (crc >> 8) & 0xFF, (crc >> 16) & 0xFF, (crc >>> 24) & 0xFF);
+      cd.push(size & 0xFF, (size >> 8) & 0xFF, (size >> 16) & 0xFF, (size >>> 24) & 0xFF);
+      cd.push(size & 0xFF, (size >> 8) & 0xFF, (size >> 16) & 0xFF, (size >>> 24) & 0xFF);
+      cd.push(nameBytes.length & 0xFF, nameBytes.length >> 8, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0);
+      cd.push(offset & 0xFF, (offset >> 8) & 0xFF, (offset >> 16) & 0xFF, (offset >>> 24) & 0xFF);
+      nameBytes.forEach(function(b){ cd.push(b); });
+      central.push(new Uint8Array(cd));
+
+      offset += entry.length;
+    });
+
+    var cdSize = central.reduce(function(a,b){ return a + b.length; }, 0);
+    var end = [];
+    end.push(0x50,0x4B,0x05,0x06, 0,0, 0,0);
+    end.push(files.length & 0xFF, files.length >> 8, files.length & 0xFF, files.length >> 8);
+    end.push(cdSize & 0xFF, (cdSize >> 8) & 0xFF, (cdSize >> 16) & 0xFF, (cdSize >>> 24) & 0xFF);
+    end.push(offset & 0xFF, (offset >> 8) & 0xFF, (offset >> 16) & 0xFF, (offset >>> 24) & 0xFF);
+    end.push(0,0);
+
+    var total = chunks.reduce(function(a,b){ return a + b.length; }, 0) + cdSize + end.length;
+    var out = new Uint8Array(total), pos = 0;
+    chunks.forEach(function(c){ out.set(c, pos); pos += c.length; });
+    central.forEach(function(c){ out.set(c, pos); pos += c.length; });
+    out.set(new Uint8Array(end), pos);
+    return out;
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
+  }
+  function colName(i){
+    var s = '';
+    i = i + 1;
+    while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); }
+    return s;
+  }
+  /* 单元格：数字走 <n>，文本走 inlineStr */
+  function cellXml(val, rowIdx, colIdx, styleIdx){
+    var ref = colName(colIdx) + rowIdx;
+    var isNum = (typeof val === 'number' && isFinite(val)) ||
+                (val !== '' && val !== null && val !== undefined && typeof val !== 'boolean' && /^-?\d+(\.\d+)?$/.test(String(val).trim()));
+    if (isNum) {
+      var n = (typeof val === 'number') ? val : parseFloat(String(val).trim());
+      return '<c r="' + ref + '"' + (styleIdx ? ' s="' + styleIdx + '"' : '') + '><v>' + n + '</v></c>';
+    }
+    return '<c r="' + ref + '" t="inlineStr"' + (styleIdx ? ' s="' + styleIdx + '"' : '') + '><is><t xml:space="preserve">' + esc(val) + '</t></is></c>';
+  }
+  function sheetXml(rows, widths){
+    var xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    if (widths && widths.length) {
+      xml += '<cols>' + widths.map(function(w,i){ return '<col min="' + (i+1) + '" max="' + (i+1) + '" width="' + w + '" customWidth="1"/>'; }).join('') + '</cols>';
+    }
+    xml += '<sheetData>';
+    rows.forEach(function(row, ri){
+      var rIdx = ri + 1;
+      xml += '<row r="' + rIdx + '">';
+      row.forEach(function(v, ci){
+        xml += cellXml(v, rIdx, ci, ri === 0 ? 1 : 0);   // 表头用样式1（加粗+底色）
+      });
+      xml += '</row>';
+    });
+    xml += '</sheetData></worksheet>';
+    return xml;
+  }
+  var STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + '<fonts count="2"><font><sz val="11"/><name val="\u5b8b\u4f53"/></font>'
+    + '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="\u5b8b\u4f53"/></font></fonts>'
+    + '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FF2B7DE9"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+    + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>'
+    + '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" horizontal="center" wrapText="1"/></xf></cellXfs>'
+    + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    + '</styleSheet>';
+
+  /* 生成 xlsx：sheets = [{name:'订单明细', rows:[[...]], widths:[...]}] */
+  function build(sheets){
+    sheets = sheets.filter(function(sh){ return sh && sh.rows && sh.rows.length; });
+    if (!sheets.length) sheets = [{ name: 'Sheet1', rows: [['\u6682\u65e0\u6570\u636e']] }];
+    var files = [];
+    function add(name, xml){
+      files.push({ name: name, data: new Uint8Array(utf8(xml)) });
+    }
+    add('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + sheets.map(function(sh,i){ return '<Override PartName="/xl/worksheets/sheet' + (i+1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join('')
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + '</Types>');
+    add('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      + '</Relationships>');
+    add('xl/workbook.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + '<sheets>' + sheets.map(function(sh,i){
+          return '<sheet name="' + esc(String(sh.name).slice(0,31).replace(/[\\\/\?\*\[\]:]/g,'_')) + '" sheetId="' + (i+1) + '" r:id="rId' + (i+1) + '"/>';
+        }).join('') + '</sheets></workbook>');
+    add('xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + sheets.map(function(sh,i){ return '<Relationship Id="rId' + (i+1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i+1) + '.xml"/>'; }).join('')
+      + '<Relationship Id="rId' + (sheets.length+1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>');
+    add('xl/styles.xml', STYLES);
+    sheets.forEach(function(sh, i){
+      add('xl/worksheets/sheet' + (i+1) + '.xml', sheetXml(sh.rows, sh.widths));
+    });
+    var bytes = zip(files);
+    return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  return { build: build };
+})();
+
+/* ============ 导出列配置 ============ */
+const EXP_COLS = [
+  { key:'no',        label:'单号',     w:14, def:true  },
+  { key:'date',      label:'制单日期', w:12, def:true  },
+  { key:'createDate',label:'录入日期', w:12, def:false },
+  { key:'cust',      label:'客户',     w:18, def:true  },
+  { key:'goods',     label:'商品',     w:22, def:true  },
+  { key:'spec',      label:'规格',     w:12, def:false },
+  { key:'unit',      label:'单位',     w:8,  def:false },
+  { key:'qty',       label:'数量',     w:8,  def:true  },
+  { key:'price',     label:'单价',     w:10, def:true  },
+  { key:'amount',    label:'金额',     w:12, def:true  },
+  { key:'cost',      label:'成本',     w:10, def:false },
+  { key:'profit',    label:'毛利',     w:10, def:false },
+  { key:'paid',      label:'已付',     w:10, def:true  },
+  { key:'debt',      label:'欠款',     w:10, def:true  },
+  { key:'handler',   label:'业务员',   w:12, def:false },
+  { key:'dev',       label:'开单设备', w:16, def:false },
+  { key:'devId',     label:'设备ID',   w:14, def:false },
+  { key:'remark',    label:'备注',     w:20, def:false }
+];
+function getExpCfg(){
+  const c = DB.get('expCfg', null);
+  if (c && c.cols && c.cols.length) return c;
+  return { cols: EXP_COLS.map(x=>({key:x.key, show:x.def})), mode:'row', fmt:'xlsx' };
+}
+function saveExpCfg(){
+  const cols=[];
+  document.querySelectorAll('.exp-col').forEach(function(el){
+    cols.push({ key: el.dataset.key, show: el.querySelector('input').checked });
+  });
+  const modeEl=document.getElementById('expMode');
+  const fmtEl=document.getElementById('expFmt');
+  const prev = DB.get('expCfg',{})||{};
+  DB.set('expCfg',{
+    cols: cols,
+    mode: modeEl?modeEl.value:'row',
+    fmt:  fmtEl?fmtEl.value:'xlsx',
+    expCust: prev.expCust||''
+  });
+}
+function renderExpCols(){
+  const box=document.getElementById('expColBox');
+  if(!box) return;
+  const cfg=getExpCfg();
+  const map={}; cfg.cols.forEach(c=>map[c.key]=c.show);
+  // 紧凑标签式：点一下切换选中，不占整行
+  box.innerHTML =
+    `<div style="display:flex;flex-wrap:wrap;gap:5px">` +
+    EXP_COLS.map(c=>`<span class="exp-col" data-key="${c.key}" onclick="toggleExpCol('${c.key}')"
+        style="display:inline-flex;align-items:center;padding:4px 9px;border-radius:12px;font-size:12px;line-height:1.2;cursor:pointer;user-select:none;border:1px solid ${map[c.key]?'#2b7de9':'#ddd'};background:${map[c.key]?'#e8f1ff':'#fff'};color:${map[c.key]?'#2b7de9':'#666'}">${c.label}</span>`).join('') +
+    `</div>
+     <div style="display:flex;gap:5px;margin-top:7px">
+       <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:12px" onclick="setAllExpCols(true)">全选</button>
+       <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:12px" onclick="setAllExpCols(false)">清空</button>
+       <button class="btn btn-add" style="margin:0;flex:1;padding:6px;font-size:12px" onclick="setDefaultExpCols()">常用</button>
+     </div>
+     <div style="font-size:11px;color:#999;margin-top:5px">已选 ${cfg.cols.filter(c=>c.show).length} / ${EXP_COLS.length} 列（点标签切换）</div>`;
+  const me=document.getElementById('expMode'); if(me) me.value=cfg.mode||'row';
+  const fe=document.getElementById('expFmt');  if(fe) fe.value=cfg.fmt||'xlsx';
+  // 回填作用域与客户下拉
+  const sc=document.getElementById('expScope');
+  if(sc){
+    const saved=DB.get('expCfg',{})||{};
+    if(saved.expScope) sc.value=saved.expScope;
+    const row=document.getElementById('expCustRow');
+    if(row) row.style.display = (sc.value==='cust') ? 'block' : 'none';
+    if(sc.value==='cust'){ fillExpCustSelect(); }
+  }
+}
+/* 点标签切换某一列 */
+function toggleExpCol(key){
+  const cfg=getExpCfg();
+  const c=cfg.cols.find(x=>x.key===key);
+  if(c) c.show=!c.show;
+  DB.set('expCfg',cfg);
+  renderExpCols();
+}
+function setAllExpCols(v){
+  const cfg=getExpCfg();
+  cfg.cols=cfg.cols.map(c=>({key:c.key, show:v}));
+  DB.set('expCfg',cfg); renderExpCols();
+}
+function setDefaultExpCols(){
+  const cfg=getExpCfg();
+  cfg.cols=EXP_COLS.map(x=>({key:x.key, show:x.def}));
+  DB.set('expCfg',cfg); renderExpCols(); toast('已恢复常用列');
+}
+/* 取一条商品的成本（优先商品自带，其次价目表） */
+function goodsCost(g){
+  if(g && g.cost!=null && g.cost!=='') return +g.cost||0;
+  const p=(DB.get('prices',[])||[]).find(x=>g && x.name===g.name);
+  return p ? (+p.cost||0) : 0;
+}
+/* 按配置把订单转成行（mode: row=一行一商品 / order=一行一张单） */
+function buildExpRows(orders, cfg){
+  const showKeys = (cfg.cols||[]).filter(c=>c.show).map(c=>c.key);
+  const cols = EXP_COLS.filter(c=>showKeys.indexOf(c.key)>=0);
+  const head = cols.map(c=>c.label);
+  const widths = cols.map(c=>c.w);
+  const rows = [];
+  const put = function(map){
+    rows.push(cols.map(c=>{
+      const v = map[c.key];
+      return (v===undefined||v===null) ? '' : v;
+    }));
+  };
+  orders.forEach(function(o){
+    const goods = o.goods||[];
+    if ((cfg.mode||'row') === 'order') {
+      // 一行一张单：商品明细合并成一格
+      const gtext = goods.map(g=>`${g.name}${g.spec?'('+g.spec+')':''} x${g.qty}${g.unit||''} ¥${fmt((+g.qty||0)*(+g.price||0))}`).join('；');
+      const qtyAll = goods.reduce((a,g)=>a+(+g.qty||0),0);
+      const costAll = goods.reduce((a,g)=>a+(+g.qty||0)*goodsCost(g),0);
+      const specAll = goods.map(g=>g.spec||'').filter(Boolean).join('、');
+      const unitAll = [...new Set(goods.map(g=>g.unit||'').filter(Boolean))].join('、');
+      const priceAll = goods.length ? fmt(goods.reduce((a,g)=>a+(+g.price||0),0)/goods.length) : '';
+      put({
+        no:o.no, date:fmtDate(o.time), createDate:(o.createDate?fmtDate(o.createDate):fmtDate(o.time)),
+        cust:o.cust, goods:gtext, spec:specAll, unit:unitAll, qty:fmt(qtyAll), price:priceAll,
+        amount:fmt(o.payable), cost:fmt(costAll), profit:fmt((+o.payable||0)-costAll),
+        paid:fmt(o.paid), debt:fmt(o.debt), handler:o.handler||'', dev:devFullName(o), devId:o.devId||'', remark:o.remark||''
+      });
+    } else {
+      if(!goods.length){
+        put({ no:o.no, date:fmtDate(o.time), createDate:(o.createDate?fmtDate(o.createDate):fmtDate(o.time)),
+              cust:o.cust, goods:'', spec:'', unit:'', qty:'', price:'', amount:fmt(o.payable), cost:'0',
+              profit:fmt(o.payable), paid:fmt(o.paid), debt:fmt(o.debt), handler:o.handler||'',
+              dev:devFullName(o), devId:o.devId||'', remark:o.remark||'' });
+        return;
+      }
+      goods.forEach(function(g){
+        const amt=(+g.qty||0)*(+g.price||0);
+        const cst=(+g.qty||0)*goodsCost(g);
+        put({
+          no:o.no, date:fmtDate(o.time), createDate:(o.createDate?fmtDate(o.createDate):fmtDate(o.time)),
+          cust:o.cust, goods:g.name, spec:g.spec||'', unit:g.unit||'', qty:g.qty, price:g.price,
+          amount:fmt(amt), cost:fmt(cst), profit:fmt(amt-cst),
+          paid:fmt(o.paid), debt:fmt(o.debt), handler:o.handler||'', dev:devFullName(o), devId:o.devId||'', remark:o.remark||''
+        });
+      });
+    }
+  });
+  return { head:head, rows:rows, widths:widths };
 }
 
 // ========== 价目表 ==========
@@ -3533,6 +4578,101 @@ function delPayment(id){
     setPayments(ps.filter(x=>x.id!==id)); toast('已删除'); renderCustList(); renderOrderList();
   }, '删除');
 }
+/* ==================== 查看某客户的订单记录 ==================== */
+function viewCustOrders(custName){
+  const old=document.getElementById('custOrdModal'); if(old&&old.remove) old.remove();
+  const m=document.createElement('div'); m.id='custOrdModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:14px';
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;width:100%;max-width:380px;border-radius:12px;padding:14px;max-height:88%;display:flex;flex-direction:column';
+  box.innerHTML=`
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px">${esc(custName)} · 订单记录</div>
+    <input id="coKw" placeholder="🔍 搜单号 / 商品名" oninput="renderCustOrders()" style="width:100%;height:36px;border:1px solid #ddd;border-radius:8px;padding:0 10px;font-size:13px;margin-bottom:6px">
+    <div class="row" style="gap:6px;margin-bottom:4px">
+      <div style="flex:1"><input id="coFrom" type="date" onchange="renderCustOrders()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:12px"></div>
+      <div style="flex:1"><input id="coTo" type="date" onchange="renderCustOrders()" style="width:100%;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:12px"></div>
+    </div>
+    <div class="row" style="gap:5px;margin-bottom:5px">
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:11px" onclick="setCustOrderRange(7)">近7天</button>
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:11px" onclick="setCustOrderRange(30)">近30天</button>
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:11px" onclick="setCustOrderMonth(0)">本月</button>
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:6px;font-size:11px" onclick="setCustOrderMonth(-1)">上月</button>
+    </div>
+    <div class="row" style="gap:6px;margin-bottom:6px">
+      <select id="coState" onchange="renderCustOrders()" style="flex:1;height:34px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+        <option value="">全部状态</option>
+        <option value="debt">有欠款</option>
+        <option value="done">已结清</option>
+      </select>
+      <button class="btn btn-ghost" style="margin:0;flex:1;padding:7px;font-size:12px" onclick="clearCustOrderFilter()">清除</button>
+    </div>
+    <div id="coSum" style="font-size:12px;color:#888;margin-bottom:6px"></div>
+    <div id="coList" style="flex:1;overflow:auto"></div>
+    <button style="width:100%;padding:12px;border:none;background:#2b7de9;color:#fff;border-radius:8px;font-size:15px;margin-top:10px" onclick="closeCustOrders()">关闭</button>`;
+  m.appendChild(box); document.body.appendChild(m);
+  m.onclick=function(e){ if(e.target===m) closeCustOrders(); };
+  window._coCust=custName;
+  renderCustOrders();
+}
+function setCustOrderRange(days){
+  const now=new Date(), p2=n=>String(n).padStart(2,'0');
+  const from=new Date(now.getTime()-days*86400000);
+  const f=document.getElementById('coFrom'); if(f) f.value=`${from.getFullYear()}-${p2(from.getMonth()+1)}-${p2(from.getDate())}`;
+  const t=document.getElementById('coTo'); if(t) t.value=`${now.getFullYear()}-${p2(now.getMonth()+1)}-${p2(now.getDate())}`;
+  renderCustOrders();
+}
+function setCustOrderMonth(offset){
+  const now=new Date(), p2=n=>String(n).padStart(2,'0');
+  let y=now.getFullYear(), m=now.getMonth()+1+offset;
+  if(m<1){ y-=1; m=12; } else if(m>12){ y+=1; m=1; }
+  const last=new Date(y, m, 0).getDate();
+  const f=document.getElementById('coFrom'); if(f) f.value=`${y}-${p2(m)}-01`;
+  const t=document.getElementById('coTo'); if(t) t.value=`${y}-${p2(m)}-${last}`;
+  renderCustOrders();
+}
+function clearCustOrderFilter(){
+  const kw=document.getElementById('coKw'); if(kw)kw.value='';
+  ['coFrom','coTo'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  const st=document.getElementById('coState'); if(st)st.value='';
+  renderCustOrders();
+}
+function renderCustOrders(){
+  const name=window._coCust||'';
+  const listBox=document.getElementById('coList');
+  const sumEl=document.getElementById('coSum');
+  if(!listBox) return;
+  let list=DB.get('orders',[]).filter(o=>(o.cust||'')===name);
+  const kw=((document.getElementById('coKw')||{}).value||'').trim().toLowerCase();
+  const from=(document.getElementById('coFrom')||{}).value||'';
+  const to=(document.getElementById('coTo')||{}).value||'';
+  const st=(document.getElementById('coState')||{}).value||'';
+  const total=list.length;
+  if(kw) list=list.filter(o=> (o.no||'').toLowerCase().indexOf(kw)>=0 || (o.remark||'').toLowerCase().indexOf(kw)>=0 ||
+      (o.goods||[]).some(g=>(g.name||'').toLowerCase().indexOf(kw)>=0));
+  if(from){ const t=new Date(from+'T00:00:00').getTime(); list=list.filter(o=>new Date(o.time).getTime()>=t); }
+  if(to){ const t=new Date(to+'T23:59:59').getTime(); list=list.filter(o=>new Date(o.time).getTime()<=t); }
+  if(st==='debt') list=list.filter(o=>(+o.debt||0)>0.005);
+  if(st==='done') list=list.filter(o=>(+o.debt||0)<=0.005);
+  list=list.slice().sort((a,b)=>new Date(b.time)-new Date(a.time));
+  const amt=list.reduce((s,o)=>s+(+o.payable||0),0);
+  const dbt=list.reduce((s,o)=>s+(+o.debt||0),0);
+  if(sumEl) sumEl.innerHTML = list.length===total
+    ? `共 ${total} 单 · 合计 ¥${fmt(amt)} · 欠款 ¥${fmt(dbt)}`
+    : `筛出 <b>${list.length}</b>/${total} 单 · 合计 ¥${fmt(amt)} · 欠款 ¥${fmt(dbt)}`;
+  if(!list.length){ listBox.innerHTML='<div class="empty">没有符合条件的订单</div>'; return; }
+  listBox.innerHTML = list.map(o=>`
+    <div class="card" style="margin-bottom:6px;padding:9px">
+      <div class="top"><span class="no">${esc(o.no)}</span><span class="date">${fmtDate(o.time)}</span></div>
+      <div class="meta" style="font-size:12px">${esc((o.goods||[]).map(g=>g.name+'x'+g.qty).join('、'))||'（无商品）'}</div>
+      <div class="meta" style="font-size:12px">合计 ¥${fmt(o.payable)}　已付 ¥${fmt(o.paid)}　<span style="color:#e34">欠 ¥${fmt(o.debt)}</span></div>
+      <div class="ops">
+        <button style="background:#e8f1ff;color:#2b7de9" onclick="closeCustOrders();viewOrder('${o.id}')">查看</button>
+        <button style="background:#e8f5e9;color:#2e7d32" onclick="closeCustOrders();openPay('${esc(name).replace(/'/g,"\\'")}','${o.id}')">收款</button>
+      </div>
+    </div>`).join('');
+}
+function closeCustOrders(){ const m=document.getElementById('custOrdModal'); if(m){ if(m.remove)m.remove(); else if(m.parentNode)m.parentNode.removeChild(m); } }
+
 function viewPayLog(custName){
   const ps=getPayments().filter(p=>p.cust===custName).sort((a,b)=>new Date(b.time)-new Date(a.time));
   const bal=custBalance(custName);
@@ -3590,6 +4730,7 @@ function renderCustList() {
       <div class="top"><span style="font-weight:600">${esc(c.name)}</span><span>${esc(c.phone||'')}</span></div>
       <div class="meta">地址：${esc(c.addr||'-')}${bal.count?`<br>订单 ${bal.count} 张 · 欠款 ¥${fmt(bal.debt)} · 已收 ¥${fmt(bal.got)} · <b style="color:#e34">还欠 ¥${fmt(bal.left)}</b>`:''}</div>
       <div class="ops">
+        <button style="background:#e8f1ff;color:#2b7de9" onclick="viewCustOrders('${esc(c.name).replace(/'/g,"\\'")}')">看单</button>
         <button style="background:#e8f5e9;color:#2e7d32" onclick="openPay('${esc(c.name).replace(/'/g,"\\'")}')">收款</button>
         <button style="background:#fff3e0;color:#ff9f1c" onclick="viewPayLog('${esc(c.name).replace(/'/g,"\\'")}')">流水</button>
         <button style="background:#e8f1ff;color:#2b7de9" onclick="printStatement('${esc(c.name).replace(/'/g,"\\'")}')">对账单</button>
@@ -3738,11 +4879,7 @@ function exportData() {
   ['orders','customers','prices','titles','staffs','warehouses','stock','stockLogs','trash','opLogs','cfg'].forEach(k => {
     data[k] = DB.get(k, null);
   });
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `开单助手备份_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
+  smartDownload(JSON.stringify(data, null, 2), `开单助手备份_${new Date().toISOString().slice(0,10)}.json`, 'application/json;charset=utf-8');
   logOp('导出本地备份', 'backup', { detail:'含订单/回收站/操作日志', who: whoAmI() });
   toast('备份文件已导出');
 }
