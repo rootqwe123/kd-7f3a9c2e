@@ -300,6 +300,7 @@
   <div class="row">
     <div><label>单据标题</label>
       <select id="docTitle"><option value="销售单">销售单</option></select>
+      <select id="bizType" title="业务类型：显示在单据和对账单上" style="flex:1;min-width:100px"></select>
     </div>
     <div><label>单号前缀</label><input id="noPrefix" placeholder="A00" value="A00"></div>
   </div>
@@ -487,6 +488,12 @@
   <input id="sPhone" placeholder="11位手机号">
   <button class="btn btn-primary" onclick="saveStaff()">添加业务员</button>
   <div id="staffList" style="margin-top:14px"></div>
+
+  <label style="margin-top:16px;font-size:13px">业务类型</label>
+  <div class="meta" style="font-size:11px;color:#999;line-height:1.5;margin-top:2px">
+    开单时可选，显示在单据和对账单的「类型」列；打印排版里可决定是否印出。
+  </div>
+  <div id="bizTypeList" style="margin-top:6px"></div>
 </div>
 <div class="page" id="page-set">
   <div id="hostedTip" class="card" style="display:none;background:#e8f5e9;border:1px solid #4caf5033;color:#2e7d32;font-size:13px;line-height:1.6"></div>
@@ -621,14 +628,6 @@
     <div class="meta" style="margin-top:8px;color:#999">提示：清浏览器缓存会重置编号；重命名不影响历史订单，历史单仍按开单当时的设备记录归类。</div>
   </div>
 
-  <div class="card" style="margin-top:16px;padding:10px;background:#fafbfc">
-    <div style="font-size:12px;color:#888;line-height:1.7">
-      版本：<b id="appVer" style="color:#2b7de9">—</b>
-      <button class="cust-chip" onclick="checkVer()" style="margin-left:6px">自检</button>
-    </div>
-    <div id="verInfo" style="font-size:12px;color:#666;margin-top:6px;line-height:1.7"></div>
-  </div>
-
   <label style="margin-top:16px">客户签字区（打印开关）</label>
   <div class="switch-row">
     <div>
@@ -695,6 +694,22 @@
     </div>
   </div>
 
+  <label style="margin-top:16px">每行格数（排版基准）</label>
+  <div class="card" style="margin-top:6px;padding:10px">
+    <div class="meta" style="font-size:12px;line-height:1.7">
+      <b>默认自动</b>：按「纸宽 − 左右边距」÷ 字号，算一行能放多少个字，就分成多少格。<br>
+      <b>纸越宽、字越小 → 格数越多</b>；纸越窄、字越大 → 格数越少。<br>
+      每个字段还能指定「从第几格起」，精确摆到那个字的起始位置。<br>
+      <span style="color:#888">（下方「商品明细表格」是独立的，始终整行，不受格数影响）</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+    <input type="number" id="gridTotalInput" min="4" max="60" placeholder="自动" oninput="setGridTotal(this.value)" onchange="renderLayoutEditor&&renderLayoutEditor()" style="width:84px;height:34px;border:1px solid #ddd;border-radius:6px;padding:0 8px;font-size:14px;text-align:center">
+    <span class="meta" style="font-size:12px">格（留空=自动）</span>
+    <button class="btn btn-ghost" style="margin:0;padding:6px 10px;font-size:12px" onclick="setGridTotal('auto');var e=document.getElementById('gridTotalInput');if(e)e.value='';try{renderLayoutEditor()}catch(x){};try{updateGridInfo()}catch(x){};toast('已恢复自动')">自动</button>
+  </div>
+  <div id="gridAutoInfo" class="meta" style="font-size:12px;color:#2b7de9;margin-top:4px"></div>
+
   <label style="margin-top:16px">📋 商品明细表格</label>
   <div class="card" style="margin-top:6px;padding:12px">
     <div class="meta" style="margin-bottom:8px">勾选要显示的列，拖动右侧数字调整列宽占比</div>
@@ -753,10 +768,28 @@
     <div><label>上边距(mm)</label><input id="marginT" type="number" value="10" oninput="savePaper()"></div>
     <div><label>下边距(mm)</label><input id="marginB" type="number" value="10" oninput="savePaper()"></div>
   </div>
-  <label style="margin-top:16px">本地备份文件（浏览器下载json）</label>
-  <button class="btn btn-add" onclick="exportData()">导出全部数据(本地备份)</button>
+  <label style="margin-top:16px">本地备份文件（json）</label>
+  <div class="card" style="margin-top:6px;padding:10px">
+    <div class="meta" style="font-size:12px">电脑点导出会弹「另存为」让你选保存位置（不走浏览器下载，最稳）；手机则直接下载。</div>
+  </div>
+  <button class="btn btn-add" onclick="exportData()">💾 导出全部数据(本地备份)</button>
   <button class="btn btn-ghost" style="margin-top:10px" onclick="document.getElementById('importFile').click()">导入本地备份</button>
   <input type="file" id="importFile" accept="application/json" style="display:none" onchange="doImport(this)">
+
+  <!-- ★ 版本号与更新日志：固定放在设置页最底部 -->
+  <div class="card" style="margin-top:28px;padding:12px;background:#fafbfc;border-top:2px solid #e8f1ff">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#888">当前版本</span>
+      <b id="appVer" style="color:#2b7de9;font-size:16px">—</b>
+      <button class="cust-chip" onclick="checkVer()" style="margin-left:auto">🔍 自检</button>
+    </div>
+    <div id="verInfo" style="font-size:12px;color:#666;margin-top:8px;line-height:1.7"></div>
+    <details style="margin-top:10px" open>
+      <summary style="font-size:12px;color:#888;cursor:pointer">📋 更新日志 · 本次改了什么</summary>
+      <div id="changelogBox" style="margin-top:8px"></div>
+    </details>
+  </div>
+  <div style="height:24px"></div>
 </div>
 <div class="page" id="page-detail">
   <div id="detailBox"></div>
@@ -932,7 +965,7 @@ function exportOpLog(){
     l.who || devFullName(l) || '', devFullName(l) || '', l.detail || ''
   ].map(cell => '"' + String(cell).replace(/"/g,'""') + '"'));
   const csv = '\ufeff' + [head.join(',')].concat(rows.map(r=>r.join(','))).join('\r\n');
-  smartDownload(csv, `开单助手操作日志_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+  exportFile(csv, `开单助手操作日志_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
 }
 
 // ========== 回收站模块 ==========
@@ -1282,7 +1315,77 @@ function undoLog(logId){
 }
 
 /* 版本自检：确认部署的是不是最新版、下载环境是否正常 */
-const APP_VER = '2.9';
+/* 更新日志（新在前）。每次升级补一条，设置页自动列出 */
+const CHANGELOG = [
+  { v:'3.5', date:'2026-11-01', title:'客户页一键开单 + 对账单术语统一',
+    items:[
+      '客户卡片新增「一键开单」按钮：点一下自动跳到开单页，并带入该客户的姓名、电话、地址、签收人',
+      '对账单底部「收款合计」改为「已付货款」，与「未付货款」成对，术语统一（打印与导出均已改）',
+    ]},
+  { v:'3.4', date:'2026-11-01', title:'排版新增「均分」：一行多字段一键等宽',
+    items:[
+      '每行标题栏新增「⇔均分」按钮：点一下，本行所有字段自动等宽平分（如单号+制单日期各占一半）',
+      '占格下拉新增「均分」选项，可只把某几个字段设为均分，与固定格数字段混用',
+      '均分按「总格数 ÷ 均分字段数」计算，如 A4 13px 共 55 格：2个字段各 27 格、3个各 18 格、4个各 13 格',
+      '商品明细表格与「整行」字段不参与均分，保持原样',
+    ]},
+  { v:'3.3', date:'2026-11-01', title:'格数改为按纸张+字号自动计算，商品明细独立',
+    items:[
+      '一行格数改为<b>自动计算</b>：（纸宽 − 左右边距）÷ 字号 = 一行能放多少字，就分成多少格',
+      '纸越宽、字越小 → 格数越多；纸越窄、字越大 → 格数越少，换纸/改字号自动跟着变',
+      '网格改为铺满整行（列均分），不再只有中间一小条，格宽真正对应字宽',
+      '格数可留空=自动，也可手动指定 4~60 格覆盖',
+      '设置页实时显示计算过程：如「纸宽210mm − 边距20mm = 190mm，字号13px → 约55格」',
+      '商品明细表格独立于网格：始终整行满宽，不参与格数定位，编辑器里也不再显示占格/起始格',
+    ]},
+  { v:'3.2', date:'2026-11-01', title:'打印排版改成网格定位（格数随字号缩放）',
+    items:[
+      '打印排版改为「网格制」：一行分成 N 格，可设置每行格数（默认20格，可调4~40）',
+      '每格宽度用 ch 单位，跟着字号自动缩放：字调大格变窄、字调小格变宽',
+      '每个字段新增「从第几格起」下拉，可精确指定内容从左边数第几格开始放（如第12格起）',
+      '占格下拉改为按当前每行格数动态生成（1~N格 + 整行），不再固定 24 格',
+      '「整行」改为真正独占一行，不会与同行其他字段挤压',
+      '业务类型改/删按钮改为 28×28 图标小按钮（✎改名、✕删除）',
+      '业务类型输入框统一为与「业务员姓名」相同的标准样式（白底16px字）',
+      '对账单打印：加商品明细（数量/单价/金额）、每张单小计、底部货款合计，去掉余额列',
+      '对账单术语「代付货款」改为「未付货款」',
+    ]},
+  { v:'3.1', date:'2026-11-01', title:'业务类型更好用 + 更新日志',
+    items:[
+      '业务类型输入框加大、字变大（14px），点一下就能改名字：回车确认、Esc 取消',
+      '每行拆成「改」「删」两个小按钮，删除键不再又宽又显眼',
+      '设置页底部新增版本号 + 更新日志，每次升级写清加了什么、改了什么',
+      '类型默认项：送货、自取、退货、换货、运费、赠品、预收款、其他',
+    ]},
+  { v:'3.0', date:'2026-10-31', title:'纯本地版 + 导出走另存为',
+    items:[
+      '彻底移除玩客云、打印机探测、/api 接口等云端逻辑，全程本地运行',
+      '导出改调系统「另存为」对话框，绕开浏览器下载拦截',
+      '设置页加「自检」：一眼看清是 file:// 还是网址、关键模块是否齐全',
+      '修复 xlsx 导出提示成功却没下下来、本地备份点没反应的问题',
+    ]},
+  { v:'2.9', date:'2026-10-31', title:'对账与列宽修复',
+    items:[
+      '订单详情新增「修改前记录」，每次改单留快照，误改误删可一键复原',
+      '对账单「类型」列显示每张单的实际业务类型（送货/自取/退货…）',
+      '表格列宽改为按比例分配 + fixed 布局，调了终于生效',
+      '数量列默认只显示数字不带单位（设置可开回带单位）',
+      '导出列勾选改成紧凑小标签；客户页「看单」可按日期/状态筛选',
+      '开过单的客户自动进客户库，带电话、地址、签收人',
+    ]},
+];
+function renderChangelog(){
+  return CHANGELOG.map(function(e){
+    var lis = e.items.map(function(x){ return '<li style="margin-bottom:3px">'+esc(x)+'</li>'; }).join('');
+    return '<div style="padding:9px 0;border-bottom:1px dashed #eee">'+
+      '<div style="font-size:13px;font-weight:600;color:#2b7de9">v'+esc(e.v)+
+      '<span style="font-weight:400;color:#aaa;font-size:11px;margin-left:8px">'+esc(e.date)+'</span></div>'+
+      '<div style="font-size:12px;color:#444;margin:3px 0 4px">'+esc(e.title)+'</div>'+
+      '<ul style="margin:0;padding-left:16px;font-size:12px;color:#666;line-height:1.6">'+lis+'</ul></div>';
+  }).join('');
+}
+
+const APP_VER = '3.5';
 function checkVer(){
   const box=document.getElementById('verInfo');
   const v=document.getElementById('appVer');
@@ -1294,6 +1397,7 @@ function checkVer(){
   lines.push('· 打开方式：<b>' + (proto==='file' ? '本地文件 file://（❌ 不能下载，请改用网址）' : '网址 ' + proto + '（✅ 可以下载）') + '</b>');
   if (isWeChat()) lines.push('· <b style="color:#e34">当前是微信内置浏览器，禁止下载</b> → 点右上角「···」选「在浏览器打开」');
   // 2 关键模块
+  lines.push('· 保存方式：<b>' + (canSavePicker() ? '支持「另存为」对话框（✅ 推荐，绕开下载）' : '仅浏览器下载（手机常见）') + '</b>');
   const mods = [
     ['XLSX生成器', typeof XLSX !== 'undefined' && typeof XLSX.build === 'function'],
     ['下载主函数', typeof smartDownload === 'function'],
@@ -1471,7 +1575,7 @@ function showTab(tab) {
   if (tab === 'price') renderPriceList();
   if (tab === 'cust') renderCustList();
   if (tab === 'title') renderTitleList();
-  if (tab === 'staff') renderStaffList();
+  if (tab === 'staff') { renderStaffList(); try{ renderBizTypes(); renderBizTypeSelect(); }catch(e){ console.warn('业务类型', e); } }
   if (tab === 'trash') { state.trashFilter='all'; renderTrashList(); }
   if (tab === 'oplog') { state.logFilter='all'; document.getElementById('logSearch').value=''; renderOpLog(); }
 }
@@ -1605,7 +1709,17 @@ function init() {
 
   renderLayoutEditor();
   try{ fillShopInputs(); fillPrintStyleInputs(); renderGoodsColEditor(); renderExpCols(); }catch(e){ console.warn('模板设置初始化', e); }
+  try{
+    var _gt=document.getElementById('gridTotalInput');
+    if(_gt){ var _v=DB.get('gridTotal',null); _gt.value = (_v==='auto'||_v==null||_v==='') ? '' : getGridTotal(); }
+    updateGridInfo();
+  }catch(e){}
+  // 业务类型单独初始化，出错也不影响其他设置
+  try{ renderBizTypes(); renderBizTypeSelect(); }catch(e){ console.warn('业务类型初始化', e); }
+  // 启动时补扫：历史开过单但不在客户库里的，自动补进来
+  try{ const _n = backfillCustomersFromOrders(); if(_n > 0){ renderCustomers && renderCustomers(); } }catch(e){}
   try{ var _av=document.getElementById('appVer'); if(_av) _av.textContent='v'+APP_VER; }catch(e){}
+  try{ var _cl=document.getElementById('changelogBox'); if(_cl) _cl.innerHTML=renderChangelog(); }catch(e){}
   // ★ iOS：编辑器若仍空白（字段渲染中断），强制用默认排版再铺一次
   if (!document.getElementById('layoutEditor').innerHTML.trim()) {
     try { DB.remove('layout'); renderLayoutEditor(); } catch(e) {}
@@ -2090,6 +2204,9 @@ function saveOrder(){
     orders.unshift(order);
   }
   DB.set('orders',orders);
+  // ★ 开单/改单后自动把客户收进客户库（客户页就能看到，下次开单也能带出资料）
+  try { autoLearnCustomer(order); } catch(e){}
+  try { renderCustomers(); } catch(e){}
   // 记录日志：新增 or 修改
   if (state.editingOrderId) {
     // ★ 改单：先把改之前的原单存快照，日志里可一键复原
@@ -2318,6 +2435,7 @@ function editOrderById(id){
   const orders=DB.get('orders',[]);const o=orders.find(x=>x.id===id);if(!o)return;
   state.editingOrderId=id;state.signData=o.sign||null;window._editingOrderObj=o;
   document.getElementById('docTitle').value=o.title;
+  { const _bt=document.getElementById('bizType'); if(_bt){ _bt.value=o.bizType||getBizTypes()[0]||''; } }
   document.getElementById('orderTime').value=o.time;
   document.getElementById('cust').value=o.cust;
   document.getElementById('custPhone').value=o.custPhone||'';
@@ -2349,7 +2467,8 @@ function printOrder(){
   const id = onFormPage ? null : window._currentOrderId;
   if(!id){
     const goods=collectGoods();if(!goods.length){toast('请添加商品');return;}
-    const order={no:genOrderNo(),createDate:fmtDate(new Date()),title:document.getElementById('docTitle').value,time:document.getElementById('orderTime').value,cust:document.getElementById('cust').value.trim(),custPhone:document.getElementById('custPhone').value.trim(),addr:document.getElementById('addr').value.trim(),signer:document.getElementById('signer').value.trim(),handler:document.getElementById('handler').value,goods,payable:+document.getElementById('payable').value||0,paid:+document.getElementById('paid').value||0,debt:(+document.getElementById('payable').value||0)-(+document.getElementById('paid').value||0),remark:document.getElementById('remark').value.trim(),sign:state.signData,...currentDevTag()};
+    const _btEl=document.getElementById('bizType');
+    const order={no:genOrderNo(),createDate:fmtDate(new Date()),title:document.getElementById('docTitle').value,bizType:(_btEl&&_btEl.value)||getBizTypes()[0]||'送货',time:document.getElementById('orderTime').value,cust:document.getElementById('cust').value.trim(),custPhone:document.getElementById('custPhone').value.trim(),addr:document.getElementById('addr').value.trim(),signer:document.getElementById('signer').value.trim(),handler:document.getElementById('handler').value,goods,payable:+document.getElementById('payable').value||0,paid:+document.getElementById('paid').value||0,debt:(+document.getElementById('payable').value||0)-(+document.getElementById('paid').value||0),remark:document.getElementById('remark').value.trim(),sign:state.signData,...currentDevTag()};
     renderPrint(order);
   }else{
     const orders=DB.get('orders',[]);const o=orders.find(x=>x.id===id);if(o)renderPrint(o);
@@ -2591,7 +2710,7 @@ function exportLocalBackupAt(ts){
   const e = list.find(x => x.t === ts);
   if (!e) return;
   const d = new Date(ts); const p = n => String(n).padStart(2,'0');
-  smartDownload(JSON.stringify(e.snapshot, null, 2), `开单助手本机存档_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`, 'application/json;charset=utf-8');
+  exportFile(JSON.stringify(e.snapshot, null, 2), `开单助手本机存档_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`, 'application/json;charset=utf-8');
 }
 function exportLatestLocalBackup(){
   const list = DB.get(LOCAL_BACKUP_KEY, []);
@@ -2758,6 +2877,7 @@ const FIELD_DEFS = [
   { key: 'addr', label: '地址' },
   { key: 'signer', label: '签收人' },
   { key: 'handler', label: '业务员' },
+  { key: 'bizType', label: '业务类型' },
   { key: 'handlerPhone', label: '业务员电话' },
   { key: 'goods', label: '商品明细' },
   { key: 'total', label: '合计金额' },
@@ -2853,6 +2973,45 @@ function fillPrintStyleInputs(){
   const ba=document.getElementById('tplBigAmtAlign'); if(ba)ba.value=st.bigAmtAlign||'center';
   const row=document.getElementById('bigAmtAlignRow');
   if(row) row.style.display = st.bigAmt ? 'flex' : 'none';
+}
+
+/* ============ 打印排版：每行格数（网格基准） ============ */
+/* ★ 自动格数：一行能放多少字 =（纸宽 − 左右边距）÷ 字号
+   中文字符宽 ≈ 1em = 字号px；1mm = 96/25.4 px */
+function computeGridTotal(){
+  try {
+    const pp = getPaper();
+    const st = getPrintStyle();
+    const fs = Math.max(8, Math.min(24, st.fontSize || 13));
+    const usableMm = Math.max(20, (+(pp && pp.w) || 210) - (+(pp && pp.ml) || 10) - (+(pp && pp.mr) || 10));
+    const usablePx = usableMm * 96 / 25.4;      // mm → CSS px
+    const n = Math.round(usablePx / fs);        // 一行能放多少个字 → 就是多少格
+    return Math.max(6, Math.min(60, n));
+  } catch(e){ return 20; }
+}
+function getGridTotal(){
+  const v = DB.get('gridTotal', null);
+  if (v === 'auto' || v == null || v === '' || v === 0) return computeGridTotal();
+  const n = parseInt(v, 10);
+  return (n >= 4 && n <= 60) ? n : computeGridTotal();
+}
+function setGridTotal(v){
+  if (v === 'auto' || v === '' || v == null) { DB.set('gridTotal', 'auto'); return; }
+  const n = parseInt(v, 10);
+  DB.set('gridTotal', (n >= 4 && n <= 60) ? n : 'auto');
+}
+/* 给设置页显示用的说明文字 */
+function updateGridInfo(){
+  var el = document.getElementById('gridAutoInfo');
+  if (el) el.textContent = '当前：' + gridAutoText() + '（生效 ' + getGridTotal() + ' 格）';
+}
+function gridAutoText(){
+  try {
+    const pp = getPaper(), st = getPrintStyle();
+    const fs = Math.max(8, Math.min(24, st.fontSize || 13));
+    const usableMm = Math.max(20, (+(pp && pp.w) || 210) - (+(pp && pp.ml) || 10) - (+(pp && pp.mr) || 10));
+    return `纸宽 ${pp.w}mm − 边距 ${(pp.ml||10)+(pp.mr||10)}mm = ${usableMm}mm，字号 ${fs}px → 一行约 ${computeGridTotal()} 格`;
+  } catch(e){ return ''; }
 }
 
 /* ============ 商品明细表格列 ============ */
@@ -2983,6 +3142,7 @@ function renderLayoutEditor(){
         <span style="font-size:13px;color:#2b7de9;font-weight:600">⠿ 第${ri+1}行</span>
         <button class="del-goods" onclick="moveRow(${ri},-1)" ${ri===0?'disabled style="opacity:.3"':''}>↑行</button>
         <button class="del-goods" onclick="moveRow(${ri},1)" ${ri===layout.length-1?'disabled style="opacity:.3"':''}>↓行</button>
+        <button class="del-goods" onclick="evenSplitRow(${ri})" style="color:#2b7de9" title="本行各字段等宽">⇔均分</button>
         <button class="del-goods" onclick="delRow(${ri})" style="color:#e34">删行</button>
         <button class="del-goods" onclick="addFieldToRow(${ri})" style="color:#2b7de9">+字段</button>
       </div><div style="display:flex;gap:6px;flex-wrap:wrap">`;
@@ -2994,10 +3154,17 @@ function renderLayoutEditor(){
           ${FIELD_DEFS.map(d=>`<option value="${d.key}" ${f.key===d.key?'selected':''}>${d.label}</option>`).join('')}
         </select>
         <div style="display:flex;gap:4px;margin-top:4px">
-          <select onchange="setField(${ri},${fi},'span',+this.value)" style="padding:3px;font-size:12px">
-            ${[1,2,3,4,5,6,7,8].map(function(n){return `<option value="${n}" ${(+f.span||12)===n?'selected':''}>${n}格</option>`;}).join('')}
-            <option value="12" ${(+f.span||12)>=9?'selected':''}>整行</option>
-          </select>
+          ${f.key==='goods'
+            ? '<span style="font-size:12px;color:#888;padding:0 4px">表格·始终整行（不受格数影响）</span>'
+            : `<select onchange="setField(${ri},${fi},'span',+this.value)" style="padding:3px;font-size:12px" title="占几格">
+                ${Array.from({length:getGridTotal()},function(_,i){var n=i+1;return `<option value="${n}" ${(+f.span||1)===n?'selected':''}>${n}格</option>`;}).join('')}
+                <option value="99" ${(+f.span||1)>=99?'selected':''}>整行</option>
+                <option value="-1" ${(+f.span===-1)?'selected':''}>均分</option>
+              </select>
+              <select onchange="setField(${ri},${fi},'start',+this.value)" style="padding:3px;font-size:12px" title="从第几格开始放">
+                <option value="0" ${!f.start?'selected':''}>自动</option>
+                ${Array.from({length:getGridTotal()},function(_,i){var n=i+1;return `<option value="${n}" ${(+f.start||0)===n?'selected':''}>第${n}格起</option>`;}).join('')}
+              </select>`}
           <select onchange="setField(${ri},${fi},'align',this.value)" style="padding:3px;font-size:12px">
             <option value="left" ${f.align==='left'?'selected':''}>左</option>
             <option value="center" ${f.align==='center'?'selected':''}>中</option>
@@ -3068,6 +3235,21 @@ function addRow(){
 const layout=getLayout();layout.push({fields:[{key:'cust',span:12,align:'left',show:true}]});DB.set('layout',layout);renderLayoutEditor();
   } catch(e) { console.error("addRow 失败",e); toast("操作失败，请重试"); try{renderLayoutEditor();}catch(_){} }
 }
+/* ★ 本行均分：把这一行所有字段设为等宽平分（保留商品表格与整行字段不动） */
+function evenSplitRow(ri){
+  try{
+    const layout = getLayout();
+    if(!layout[ri]) return;
+    // 参与均分的字段：显示中、非商品表格、非整行
+    const targets = layout[ri].fields.filter(f => f.show && f.key!=='goods' && !(+f.span >= 99));
+    if(!targets.length){ toast('本行没有可均分的字段'); return; }
+    targets.forEach(f=>{ f.span = -1; f.start = 0; });   // -1 = 均分，start 0 = 自动排列
+    DB.set('layout', layout);
+    renderLayoutEditor();
+    toast('本行 '+targets.length+' 个字段已均分');
+  }catch(e){ console.warn('evenSplitRow', e); toast('均分失败'); }
+}
+
 function delRow(ri){
   try {
     const __L=getLayout();
@@ -3116,6 +3298,7 @@ function buildFieldValue(key,o){
   switch(key){
     case 'title':return esc(o.title||'销售单');
     case 'no':return esc(o.no||'');
+    case 'bizType':return o.bizType || '';
     case 'date':return fmtDate(o.time);           // 制单日期 = 开单日期
     case 'createDate':return fmtDate(o.createDate || o.time); // 录入日期（实际哪天录的单）
     case 'cust':return esc(o.cust||'');
@@ -3254,21 +3437,36 @@ function renderPrintWithLayout(o, layout) {
   layout.forEach(row => {
     const visible = row.fields.filter(f => f.show);
     if (!visible.length) return;
-    html += '<div style="display:flex;gap:6px;margin:3px 0;flex-wrap:wrap">';
+    // ★ 网格制：一行 = getGridTotal() 格，每格宽 = 整行宽 ÷ 格数（随纸张与字号自动算）
+    const GT = getGridTotal();
+    // 先数出本行有多少个「均分」字段 → 决定每个分几格
+    const evenCount = visible.filter(f => (+f.span === -1)).length;
+    const evenSpan = evenCount ? Math.max(1, Math.floor(GT / evenCount)) : 0;
+    html += `<div style="display:grid;grid-template-columns:repeat(${GT},minmax(0,1fr));width:100%;max-width:100%;margin:3px 0">`;
+    let _cursor = 1;   // 未指定起始格时，按顺序自动排列
     visible.forEach(f => {
+      const isFull = (+f.span >= 99);
+      const isEven = (+f.span === -1);
+      const spanN = isFull ? GT : (isEven ? evenSpan : Math.max(1, Math.min(+f.span || 1, GT)));
+      // 起始格：用户指定优先，否则从当前游标开始
+      let startN = (f.start != null && +f.start >= 1) ? (+f.start) : _cursor;
+      startN = Math.max(1, Math.min(startN, GT));
+      if (startN + spanN - 1 > GT) startN = Math.max(1, GT - spanN + 1);  // 防溢出
+      _cursor = startN + spanN;
+      const posCss = isFull ? 'grid-column:1 / -1' : `grid-column:${startN} / span ${spanN}`;
       if (f.key === 'goods') {
-        html += `<div style="flex:1;width:100%;text-align:${f.align}" class="pm-line">${buildGoodsBlock(o)}</div>`;
+        html += `<div style="grid-column:1 / -1;text-align:${f.align}" class="pm-line">${buildGoodsBlock(o)}</div>`;
       } else if (f.key === 'sign' || f.key === 'shop' || f.key === 'shopSub' || f.key === 'slogan' || f.key === 'qrcode') {
-        html += `<div style="flex:${f.span};text-align:${f.align}" class="pm-line">${buildFieldValue(f.key, o)}</div>`;
+        html += `<div style="${posCss};text-align:${f.align}" class="pm-line">${buildFieldValue(f.key, o)}</div>`;
       } else {
         const label = FIELD_DEFS.find(d=>d.key===f.key)?.label || f.key;
         const isTitle = (f.key === 'title');
         const sizeCss = isTitle ? `font-size:${ts}px;font-weight:700` : '';
         // ★ 单据标题只显示内容本身，不再显示"单据标题："这几个字
         if (isTitle) {
-          html += `<div style="flex:${f.span};text-align:${f.align};${sizeCss}" class="pm-line">${buildFieldValue(f.key, o)}</div>`;
+          html += `<div style="${posCss};text-align:${f.align};${sizeCss}" class="pm-line">${buildFieldValue(f.key, o)}</div>`;
         } else {
-          html += `<div style="flex:${f.span};text-align:${f.align};${sizeCss}" class="pm-line"><span style="color:#888">${label}：</span>${buildFieldValue(f.key, o)}</div>`;
+          html += `<div style="${posCss};text-align:${f.align};${sizeCss}" class="pm-line"><span style="color:#888">${label}：</span>${buildFieldValue(f.key, o)}</div>`;
         }
       }
     });
@@ -3479,9 +3677,9 @@ function batchPrint() {
   const orders = DB.get('orders', []).filter(o => ids.indexOf(o.id) >= 0);
   if (!orders.length) { toast('选中的订单不存在'); return; }
   const paper = document.getElementById('pmPaper');
-  paper.innerHTML = orders.map((o,i) =>
-    `<div class="pm-batch"${i < orders.length-1 ? ' style="page-break-after:always"' : ''}>${buildPrintHtml(o)}</div>`
-  ).join('');
+  paper.innerHTML = orders.map(function(o,i){
+    return '<div class="pm-batch"' + (i < orders.length-1 ? ' style="page-break-after:always"' : '') + '>' + buildPrintHtml(o) + '</div>';
+  }).join('');
   applyPaperSize();
   document.getElementById('printModal').classList.add('show');
   window._printOrder = null;
@@ -3660,7 +3858,7 @@ function buildStatementSheet(custName){
   const ps=(DB.get('payments',[])||[]).filter(p=>p.cust===custName).sort((a,b)=>new Date(a.time)-new Date(b.time));
   const bal=custBalance(custName);
   const rows=[['日期','类型','单号/方式','金额','滚动余额','商品明细','备注']];
-  const list=[...orders.map(o=>({t:o.time,kind:'送货',no:o.no,amt:+o.payable||0,
+  const list=[...orders.map(o=>({t:o.time,kind:(o.bizType||'送货'),no:o.no,amt:+o.payable||0,
               note:(o.goods||[]).map(g=>`${g.name}x${g.qty}${g.unit||''}`).join(' '), remark:o.remark||''})),
             ...ps.map(p=>({t:p.time,kind:'收款',no:p.way||'',amt:-(+p.amount||0),
               note:p.orderId?'已冲抵订单':'', remark:p.note||''}))]
@@ -3671,7 +3869,7 @@ function buildStatementSheet(custName){
     rows.push([fmtDate(r.t), r.kind, r.no, fmt(r.amt), fmt(run), r.note, r.remark]);
   });
   rows.push([]);
-  rows.push(['合计','','','','',`送货 ¥${fmt(bal.debt)}　收款 ¥${fmt(bal.got)}`,`尚欠 ¥${fmt(bal.left)}`]);
+  rows.push(['合计','','','','',`货款合计 ¥${fmt(bal.debt)}　已付货款 ¥${fmt(bal.got)}`,`未付货款 ¥${fmt(bal.left)}`]);
   return { name:'对账_'+String(custName).slice(0,20), rows:rows, widths:[12,8,14,12,14,34,18] };
 }
 
@@ -4017,9 +4215,47 @@ function smartDownload(content, filename, mime){
   showSaveFallback(content, filename, mime);
 }
 
+/* ============ 另存为对话框（绕开浏览器下载） ============
+   Edge/Chrome 电脑版支持 showSaveFilePicker：弹系统「另存为」窗口，
+   用户选位置后直接写文件，不走浏览器下载通道。
+   下载被拦、下载目录不可写时这条路照样能存下文件。 */
+function canSavePicker(){
+  try { return typeof window.showSaveFilePicker === 'function'; } catch(e){ return false; }
+}
+function extOf(name){ const i=String(name||'').lastIndexOf('.'); return i>=0?String(name).slice(i):''; }
+function saveViaPicker(data, filename, mime){
+  if (!canSavePicker()) return Promise.resolve('fail');
+  const ext = extOf(filename);
+  const opts = { suggestedName: filename,
+    types: [{ description: '保存文件', accept: { [mime || 'application/octet-stream']: [ext || '.txt'] } }] };
+  return window.showSaveFilePicker(opts).then(function(handle){
+    return handle.createWritable().then(function(w){
+      return w.write(data).then(function(){ return w.close(); });
+    });
+  }).then(function(){ return 'ok'; })
+    .catch(function(e){
+      if (e && e.name === 'AbortError') return 'cancel';   // 用户取消
+      return 'fail';
+    });
+}
+/* 统一导出入口：优先弹「另存为」，不可用再走浏览器下载 */
+function exportFile(payload, filename, mime){
+  if (canSavePicker()) {
+    saveViaPicker(payload, filename, mime).then(function(r){
+      if (r === 'ok') { toast('✅ 已保存到你选的位置：' + filename); return; }
+      if (r === 'cancel') { return; }
+      if (payload instanceof Blob) smartBlobDownload(payload, filename);
+      else smartDownload(payload, filename, mime);
+    });
+    return;
+  }
+  if (payload instanceof Blob) smartBlobDownload(payload, filename);
+  else smartDownload(payload, filename, mime);
+}
+
 function downloadCsv(rows, filename){
   const csv = '\ufeff' + rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  smartDownload(csv, filename, 'text/csv;charset=utf-8');
+  exportFile(csv, filename, 'text/csv;charset=utf-8');
 }
 
 
@@ -4219,6 +4455,211 @@ var XLSX = (function(){
   }
   return { build: build };
 })();
+
+/* ============ 开单后自动把客户收进客户库 ============ */
+/* 客户库里没有这个客户 → 按开单时填的资料自动建档；
+   已有 → 补全空缺字段（电话/地址/签收人），不覆盖已有内容。 */
+function autoLearnCustomer(o, opts){
+  try{
+    if(!o || !o.cust) return false;
+    const name = String(o.cust).trim();
+    if(!name) return false;
+    const list = DB.get('customers', []) || [];
+    const exist = list.find(c => c && c.name === name);
+    if (exist) {
+      let changed = false;
+      // 只补空缺，不覆盖
+      [['phone','custPhone'], ['addr','addr'], ['signer','signer']].forEach(function(pair){
+        const ck = pair[0], ok = pair[1];
+        if (!exist[ck] && o[ok]) { exist[ck] = o[ok]; changed = true; }
+      });
+      if (changed) { DB.set('customers', list); return true; }
+      return false;
+    }
+    list.push({
+      id: 'c' + Date.now() + Math.random().toString(36).slice(2,6),
+      name: name,
+      phone: o.custPhone || '',
+      addr: o.addr || '',
+      signer: o.signer || '',
+      note: '',
+      auto: true,                      // 标记：开单自动建档
+      createdAt: new Date().toISOString()
+    });
+    DB.set('customers', list);
+    return true;
+  }catch(e){ return false; }
+}
+/* 补扫：把历史订单里的客户也收进客户库（第一次用或清过库时用） */
+function backfillCustomersFromOrders(){
+  try{
+    const list = DB.get('customers', []) || [];
+    const orders = DB.get('orders', []) || [];
+    let n = 0;
+    orders.forEach(function(o){
+      if(!o || !o.cust) return;
+      const name = String(o.cust).trim();
+      if(!name || list.some(c=>c && c.name===name)) return;
+      list.push({
+        id: 'c' + Date.now() + Math.random().toString(36).slice(2,6) + n,
+        name: name,
+        phone: o.custPhone || '', addr: o.addr || '', signer: o.signer || '',
+        note: '', auto: true, createdAt: new Date().toISOString()
+      });
+      n++;
+    });
+    if(n){ DB.set('customers', list); }
+    return n;
+  }catch(e){ return 0; }
+}
+
+/* ============ 业务类型（像客户/标题/业务员一样自由管理） ============ */
+
+/* ================= 业务类型（彻底重写：纯全局、无闭包状态） ================= */
+const DEFAULT_BIZ_TYPES = ['送货','自取','退货','换货','运费','赠品','预收款','其他'];
+
+function getBizTypes(){
+  try {
+    const t = DB.get('bizTypes', null);
+    if (Array.isArray(t) && t.length) return t.slice();
+  } catch(e){}
+  return DEFAULT_BIZ_TYPES.slice();
+}
+function setBizTypes(arr){
+  try { DB.set('bizTypes', (arr && arr.length) ? arr.slice() : DEFAULT_BIZ_TYPES.slice()); } catch(e){}
+}
+
+/* 渲染：不依赖任何闭包变量，编辑态直接从 DOM 读 */
+function renderBizTypes(){
+  var box = document.getElementById('bizTypeList');
+  if (!box) return;
+  var t = getBizTypes();
+  var editing = box.getAttribute('data-editing');   // 正在编辑第几行（字符串或 null）
+  var html = '';
+  for (var i = 0; i < t.length; i++) {
+    var v = t[i];
+    if (editing === String(i)) {
+      html += '<div style="display:flex;gap:5px;align-items:center;margin-bottom:8px">'
+        + '<input class="bt-in" id="btEditInput" autofocus value="' + esc(v) + '"'
+        + ' onblur="bizEditCommit(' + i + ', this.value)"'
+        + ' onkeydown="bizEditKey(event, ' + i + ', this.value)"'
+        + ' style="flex:1;min-width:0;padding:11px;border:2px solid #2b7de9;border-radius:8px;font-size:16px;background:#fff;color:#222">'
+        + '<button class="btn btn-add" style="margin:0;padding:0;width:28px;height:28px;min-width:28px;font-size:15px;line-height:1;border-radius:6px;flex:0 0 28px" onclick="bizEditSave(' + i + ')" title="保存">✓</button>'
+        + '<button class="btn btn-ghost" style="margin:0;padding:0;width:28px;height:28px;min-width:28px;font-size:15px;line-height:1;color:#999;border-radius:6px;flex:0 0 28px" onclick="bizEditCancel()" title="取消">✕</button>'
+        + '</div>';
+    } else {
+      html += '<div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">'
+        + '<input class="bt-in" readonly value="' + esc(v) + '" onclick="bizEditStart(' + i + ')"'
+        + ' style="flex:1;min-width:0;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:16px;background:#fff;color:#222;cursor:text">'
+        + '<button class="btn btn-ghost" style="margin:0;padding:0;width:28px;height:28px;min-width:28px;font-size:14px;line-height:1;color:#2b7de9;border-radius:6px;flex:0 0 28px" onclick="bizEditStart(' + i + ')" title="改名字">✎</button>'
+        + '<button class="btn btn-ghost" style="margin:0;padding:0;width:28px;height:28px;min-width:28px;font-size:14px;line-height:1;color:#e34;border-radius:6px;flex:0 0 28px" onclick="bizTypeDel(' + i + ')" title="删除">✕</button>'
+        + '</div>';
+    }
+  }
+  html += '<div style="display:flex;gap:5px;margin-top:7px">'
+    + '<button class="btn btn-add" style="margin:0;flex:1;padding:7px;font-size:12px" onclick="bizTypeAdd()">+ 加一个</button>'
+    + '<button class="btn btn-ghost" style="margin:0;flex:1;padding:7px;font-size:12px" onclick="bizTypeReset()">恢复默认</button>'
+    + '</div>';
+  box.innerHTML = html;
+}
+
+/* 编辑态操作 */
+function bizEditStart(i){
+  var box = document.getElementById('bizTypeList');
+  if (!box) return;
+  box.setAttribute('data-editing', String(i));
+  renderBizTypes();
+  var el = document.getElementById('btEditInput');
+  if (el) { try { el.focus(); el.select(); } catch(e){} }
+}
+function bizEditCancel(){
+  var box = document.getElementById('bizTypeList');
+  if (box) box.removeAttribute('data-editing');
+  renderBizTypes();
+}
+function bizEditSave(i){
+  var el = document.getElementById('btEditInput');
+  bizEditCommit(i, el ? el.value : '');
+}
+function bizEditKey(ev, i, val){
+  if (ev.key === 'Enter'){ ev.preventDefault(); bizEditCommit(i, val); }
+  else if (ev.key === 'Escape'){ bizEditCancel(); }
+}
+function bizEditCommit(i, val){
+  var box = document.getElementById('bizTypeList');
+  var t = getBizTypes();
+  var v = String(val || '').trim();
+  if (!v){ toast('类型名不能为空'); bizEditStart(i); return; }
+  if (t.indexOf(v) >= 0 && v !== t[i]){ toast('「' + v + '」已存在'); bizEditStart(i); return; }
+  t[i] = v;
+  setBizTypes(t);
+  if (box) box.removeAttribute('data-editing');
+  renderBizTypes();
+  renderBizTypeSelect();
+  toast('已改名');
+}
+
+/* 增删 */
+function bizTypeAdd(){
+  var t = getBizTypes();
+  t.push('新类型');
+  setBizTypes(t);
+  var box = document.getElementById('bizTypeList');
+  if (box) box.setAttribute('data-editing', String(t.length - 1));
+  renderBizTypes();
+  renderBizTypeSelect();
+  var el = document.getElementById('btEditInput');
+  if (el) { try { el.focus(); el.select(); } catch(e){} }
+}
+function bizTypeDel(i){
+  var t = getBizTypes();
+  if (t.length <= 1){ toast('至少保留一个类型'); return; }
+  var name = t[i];
+  askConfirm('删除类型「' + name + '」？', function(){
+    var arr = getBizTypes();
+    arr.splice(i, 1);
+    setBizTypes(arr);
+    var box = document.getElementById('bizTypeList');
+    if (box) box.removeAttribute('data-editing');
+    renderBizTypes();
+    renderBizTypeSelect();
+    toast('已删除');
+  }, '删除');
+}
+function bizTypeReset(){
+  setBizTypes(DEFAULT_BIZ_TYPES.slice());
+  var box = document.getElementById('bizTypeList');
+  if (box) box.removeAttribute('data-editing');
+  renderBizTypes();
+  renderBizTypeSelect();
+  toast('已恢复默认类型');
+}
+
+/* 同步开单页下拉 */
+function renderBizTypeSelect(){
+  var sel = document.getElementById('bizType');
+  if (!sel) return;
+  var t = getBizTypes();
+  var cur = sel.value;
+  sel.innerHTML = t.map(function(v){ return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join('');
+  sel.value = (t.indexOf(cur) >= 0) ? cur : (t[0] || '');
+}
+
+/* 挂到 window：内联 onclick 一定能找到 */
+window.renderBizTypes = renderBizTypes;
+window.renderBizTypeSelect = renderBizTypeSelect;
+window.getBizTypes = getBizTypes;
+window.setBizTypes = setBizTypes;
+window.bizEditStart = bizEditStart;
+window.bizEditCancel = bizEditCancel;
+window.bizEditSave = bizEditSave;
+window.bizEditKey = bizEditKey;
+window.bizEditCommit = bizEditCommit;
+window.bizTypeAdd = bizTypeAdd;
+window.bizTypeDel = bizTypeDel;
+window.bizTypeReset = bizTypeReset;
+
+/* ============ 导出列配置 ============ */
 
 /* ============ 导出列配置 ============ */
 const EXP_COLS = [
@@ -4789,26 +5230,63 @@ function viewPayLog(custName){
   m.onclick=function(e){ if(e.target===m) closePayModal(); };
 }
 function closePayModal(){ const m=document.getElementById('payModal'); if(m){ if(m.remove)m.remove(); else if(m.parentNode)m.parentNode.removeChild(m); } renderCustList(); }
-/* 客户对账单：某客户的送货+收款流水，可直接打印 */
+/* 客户对账单：送货明细（含货品详情+每行小计）+ 收款流水 + 底部合计，可直接打印 */
 function printStatement(custName){
   const orders=DB.get('orders',[]).filter(o=>o.cust===custName).sort((a,b)=>new Date(a.time)-new Date(b.time));
   const ps=getPayments().filter(p=>p.cust===custName).sort((a,b)=>new Date(a.time)-new Date(b.time));
-  const bal=custBalance(custName);
-  const rows=[...orders.map(o=>({t:o.time,kind:'送货',no:o.no,amt:+o.payable||0,note:(o.goods||[]).map(g=>g.name+'x'+g.qty).join(' ')})),
-              ...ps.map(p=>({t:p.time,kind:'收款',no:p.way||'',amt:-(+p.amount||0),note:p.note||''}))]
-             .sort((a,b)=>new Date(a.t)-new Date(b.t));
-  let run=0;
+
+  // 合计：货款 / 已付货款 / 未付货款
+  const totalGoods=orders.reduce((a,o)=>a+(+o.payable||0),0);
+  const totalPay=ps.reduce((a,p)=>a+(+p.amount||0),0);
+  const left=totalGoods-totalPay;
+
+  const items=[...orders.map(o=>({t:o.time,kind:(o.bizType||'送货'),no:o.no,order:o})),
+               ...ps.map(p=>({t:p.time,kind:'收款',no:p.way||'',pay:p}))]
+              .sort((a,b)=>new Date(a.t)-new Date(b.t));
+
+  let bodyHtml='';
+  items.forEach(function(it){
+    if(it.pay){
+      // 收款行
+      bodyHtml+=`<tr><td>${fmtDate(it.t)}</td><td>收款</td><td>${esc(it.no||'')}</td><td colspan="3">${esc(it.pay.note||'')}</td><td class="r" style="color:#2e7d32">-${fmt(+it.pay.amount||0)}</td></tr>`;
+      return;
+    }
+    const o=it.order;
+    const goods=o.goods||[];
+    if(!goods.length){
+      bodyHtml+=`<tr><td>${fmtDate(it.t)}</td><td>${esc(it.kind)}</td><td>${esc(o.no||'')}</td><td colspan="3">（无商品明细）</td><td class="r">${fmt(o.payable||0)}</td></tr>`;
+      return;
+    }
+    const span=goods.length+1;           // 商品行 + 小计行
+    let tqty=0;
+    goods.forEach(function(g,gi){
+      const qty=+g.qty||0, price=+g.price||0, amt=qty*price;
+      tqty+=qty;
+      const head = gi===0
+        ? `<td rowspan="${span}">${fmtDate(it.t)}</td><td rowspan="${span}">${esc(it.kind)}</td><td rowspan="${span}">${esc(o.no||'')}</td>`
+        : '';
+      bodyHtml+=`<tr>${head}<td>${esc(g.name||'')}${g.spec?'（'+esc(g.spec)+'）':''}</td><td class="r">${qty}${g.unit||''}</td><td class="r">${fmt(price)}</td><td class="r">${fmt(amt)}</td></tr>`;
+    });
+    // 每张单的小计
+    bodyHtml+=`<tr class="sub"><td>小计</td><td class="r">${tqty}</td><td class="r">—</td><td class="r"><b>${fmt(o.payable||0)}</b></td></tr>`;
+  });
+
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>对账单 · ${esc(custName)}</title>
 <style>@page{size:A4;margin:12mm}body{font-family:sans-serif;font-size:13px}
-h2{text-align:center;margin:0 0 4px}.sub{text-align:center;color:#666;font-size:12px;margin-bottom:12px}
-table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:5px 6px;text-align:left}
-th{background:#f0f0f0}.r{text-align:right}.tot{margin-top:12px;font-size:15px;text-align:right}
+h2{text-align:center;margin:0 0 4px}.sub-t{text-align:center;color:#666;font-size:12px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:5px 6px;text-align:left;vertical-align:top}
+th{background:#f0f0f0}.r{text-align:right}
+tr.sub td{background:#f7f7f7;font-size:12px}
+tfoot td{background:#eef4ff;font-weight:600;font-size:14px}
+.tot{margin-top:12px;font-size:15px;text-align:right;line-height:2}
 .tot b{color:#e34}</style></head><body>
-<h2>客户对账单</h2><div class="sub">${esc(custName)}　打印时间：${new Date().toLocaleString('zh-CN')}</div>
-<table><tr><th>日期</th><th>类型</th><th>单号/方式</th><th class="r">金额</th><th class="r">余额</th><th>说明</th></tr>
-${rows.map(r=>{run+=r.amt;return `<tr><td>${fmtDate(r.t)}</td><td>${r.kind}</td><td>${esc(r.no)}</td><td class="r">${r.amt>=0?'+':''}${fmt(r.amt)}</td><td class="r">${fmt(run)}</td><td>${esc(r.note)}</td></tr>`}).join('')}
+<h2>客户对账单</h2><div class="sub-t">${esc(custName)}　打印时间：${new Date().toLocaleString('zh-CN')}</div>
+<table>
+<thead><tr><th>日期</th><th>类型</th><th>单号</th><th>商品</th><th class="r">数量</th><th class="r">单价</th><th class="r">金额</th></tr></thead>
+<tbody>${bodyHtml}</tbody>
+<tfoot><tr><td colspan="6" class="r">货款合计</td><td class="r">¥${fmt(totalGoods)}</td></tr></tfoot>
 </table>
-<div class="tot">累计送货：¥${fmt(bal.debt)}　累计收款：¥${fmt(bal.got)}　<b>尚欠：¥${fmt(bal.left)}</b></div>
+<div class="tot">货款合计：<b>¥${fmt(totalGoods)}</b>　已付货款：¥${fmt(totalPay)}　未付货款：<b>¥${fmt(left)}</b></div>
 </body></html>`;
   const w=window.open('','_blank'); if(!w){ toast('请允许弹出窗口'); return; }
   w.document.write(html); w.document.close(); setTimeout(()=>w.print(),400);
@@ -4825,6 +5303,7 @@ function renderCustList() {
       <div class="top"><span style="font-weight:600">${esc(c.name)}</span><span>${esc(c.phone||'')}</span></div>
       <div class="meta">地址：${esc(c.addr||'-')}${bal.count?`<br>订单 ${bal.count} 张 · 欠款 ¥${fmt(bal.debt)} · 已收 ¥${fmt(bal.got)} · <b style="color:#e34">还欠 ¥${fmt(bal.left)}</b>`:''}</div>
       <div class="ops">
+        <button style="background:#2b7de9;color:#fff" onclick="quickOrder('${esc(c.name).replace(/'/g,"\\'")}')">一键开单</button>
         <button style="background:#e8f1ff;color:#2b7de9" onclick="viewCustOrders('${esc(c.name).replace(/'/g,"\\'")}')">看单</button>
         <button style="background:#e8f5e9;color:#2e7d32" onclick="openPay('${esc(c.name).replace(/'/g,"\\'")}')">收款</button>
         <button style="background:#fff3e0;color:#ff9f1c" onclick="viewPayLog('${esc(c.name).replace(/'/g,"\\'")}')">流水</button>
@@ -4834,6 +5313,31 @@ function renderCustList() {
       </div>
     </div>`;}).join('');
 }
+/* ★ 一键开单：带上这个客户的资料直接跳到开单页 */
+function quickOrder(name){
+  const c = (DB.get('customers', []) || []).find(x => x && x.name === name);
+  try{ showTab('order'); }catch(e){}
+  setTimeout(function(){
+    try{
+      const el = document.getElementById('cust');
+      if (el) {
+        el.value = name;
+        el.dispatchEvent(new Event('input',  { bubbles:true }));
+        el.dispatchEvent(new Event('change', { bubbles:true }));
+      }
+      // 带出电话/地址/签收人
+      if (c) {
+        const setv = function(id, v){ const e=document.getElementById(id); if(e && v){ e.value=v; } };
+        setv('custPhone', c.phone); setv('addr', c.addr); setv('signer', c.signer);
+      }
+      // 光标移到商品名，方便接着填
+      const g = document.querySelector('.g-name');
+      if (g) g.focus();
+      toast('已带入「' + name + '」，接着选商品开单');
+    }catch(e){ console.warn('quickOrder', e); }
+  }, 120);
+}
+
 function editCust(i) {
   const c = DB.get('customers', [])[i];
   if (!c) return;
@@ -4974,7 +5478,7 @@ function exportData() {
   ['orders','customers','prices','titles','staffs','warehouses','stock','stockLogs','trash','opLogs','cfg'].forEach(k => {
     data[k] = DB.get(k, null);
   });
-  smartDownload(JSON.stringify(data, null, 2), `开单助手备份_${new Date().toISOString().slice(0,10)}.json`, 'application/json;charset=utf-8');
+      exportFile(JSON.stringify(data, null, 2), `开单助手备份_${new Date().toISOString().slice(0,10)}.json`, 'application/json;charset=utf-8');
   logOp('导出本地备份', 'backup', { detail:'含订单/回收站/操作日志', who: whoAmI() });
   toast('备份文件已导出');
 }
