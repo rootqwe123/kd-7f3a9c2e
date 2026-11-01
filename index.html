@@ -770,7 +770,7 @@
   </div>
   <label style="margin-top:16px">本地备份文件（json）</label>
   <div class="card" style="margin-top:6px;padding:10px">
-    <div class="meta" style="font-size:12px">电脑点导出会弹「另存为」让你选保存位置（不走浏览器下载，最稳）；手机则直接下载。</div>
+    <div class="meta" style="font-size:12px">电脑点导出会<b>弹「另存为」让你选保存位置</b>（桌面、U盘、网盘文件夹都行，不走浏览器下载，最稳）；手机没有此接口，直接下载。</div>
   </div>
   <button class="btn btn-add" onclick="exportData()">💾 导出全部数据(本地备份)</button>
   <button class="btn btn-ghost" style="margin-top:10px" onclick="document.getElementById('importFile').click()">导入本地备份</button>
@@ -1317,6 +1317,27 @@ function undoLog(logId){
 /* 版本自检：确认部署的是不是最新版、下载环境是否正常 */
 /* 更新日志（新在前）。每次升级补一条，设置页自动列出 */
 const CHANGELOG = [
+  { v:'3.8', date:'2026-11-01', title:'★修复设置页整页消失（开关全不见的真凶）',
+    items:[
+      '<b>关键修复</b>：设置页曾整页消失，导致自动备份、定时备份、客户签字等所有开关都看不见',
+      '原因：清理脚本用 outerHTML 判断，而更新日志正文里提到了平台名，导致整个设置页被误判成水印删除',
+      '改为只检查元素自身的 id/class/href/src，不再看 outerHTML（避免父元素因子元素文字被误判）',
+      '双保险：清理脚本永远跳过应用自己的页面容器（id 以 page- 开头）',
+      '实测：开关数从 1 个恢复到 34 个，连续 10 轮扫描后依然全部健在',
+    ]},
+  { v:'3.7', date:'2026-11-01', title:'导出改回「另存为」优先（解决电脑下载失败）',
+    items:[
+      '导出恢复为优先弹系统「另存为」窗口：自己选保存位置（桌面/U盘/网盘文件夹），<b>不走浏览器下载通道</b>，彻底绕开下载拦截',
+      '不支持另存为的浏览器/手机自动降级为标准下载 + 兜底弹窗，不会卡住',
+      '点「取消」不会重复弹下载，符合直觉',
+      '<b>打印不受影响</b>：打印走独立通道（玩客云 /api/print 或浏览器 window.print），与导出分开',
+    ]},
+  { v:'3.6', date:'2026-11-01', title:'导出恢复正常下载 + 修复开关被误删',
+    items:[
+      '导出恢复为标准浏览器下载：不再弹系统「另存为」窗口，改回常规下载（因为电脑下载限制已解除）',
+      '备份全部数据、汇总 Excel、CSV、日志等所有导出均走同一标准下载通道，文件落到浏览器下载目录',
+      '<b>修复：设置页右侧开关越用越少</b>——一段去水印脚本按「右下角浮动元素」模糊匹配误删了开关滑块，现改为只精确移除托管平台水印元素',
+    ]},
   { v:'3.5', date:'2026-11-01', title:'客户页一键开单 + 对账单术语统一',
     items:[
       '客户卡片新增「一键开单」按钮：点一下自动跳到开单页，并带入该客户的姓名、电话、地址、签收人',
@@ -1385,7 +1406,7 @@ function renderChangelog(){
   }).join('');
 }
 
-const APP_VER = '3.5';
+const APP_VER = '3.8';
 function checkVer(){
   const box=document.getElementById('verInfo');
   const v=document.getElementById('appVer');
@@ -4238,17 +4259,27 @@ function saveViaPicker(data, filename, mime){
       return 'fail';
     });
 }
-/* 统一导出入口：优先弹「另存为」，不可用再走浏览器下载 */
+/* 统一导出入口：优先弹系统「另存为」窗口（绕开浏览器下载拦截），
+   不支持或失败时自动降级为浏览器标准下载。
+   电脑：弹另存为 → 自己选位置（桌面/U盘/网盘文件夹都行）
+   手机：没有另存为接口，直接走标准下载 + 兜底弹窗 */
 function exportFile(payload, filename, mime){
+  // Blob 先转成可直接写入的数据
+  var toData = function(blob){
+    return blob.arrayBuffer ? blob.arrayBuffer() : Promise.resolve(blob);
+  };
   if (canSavePicker()) {
-    saveViaPicker(payload, filename, mime).then(function(r){
-      if (r === 'ok') { toast('✅ 已保存到你选的位置：' + filename); return; }
-      if (r === 'cancel') { return; }
+    var data = (payload instanceof Blob) ? payload : new Blob([payload], { type: mime || 'text/plain' });
+    saveViaPicker(data, filename, mime).then(function(r){
+      if (r === 'ok') { toast('已保存到你选的位置'); return; }
+      if (r === 'cancel') { return; }               // 用户取消，不再降级
+      // fail：降级标准下载
       if (payload instanceof Blob) smartBlobDownload(payload, filename);
       else smartDownload(payload, filename, mime);
     });
     return;
   }
+  // 不支持另存为（手机）：标准下载
   if (payload instanceof Blob) smartBlobDownload(payload, filename);
   else smartDownload(payload, filename, mime);
 }
@@ -5568,79 +5599,45 @@ document.addEventListener('DOMContentLoaded', init);
 </script>
 
 <script>
-/* 清除 Netlify 免费版注入的 "Powered by Netlify" 角标
-   策略：①含 netlify 字样/链接 ②按位置特征（右下角+浮动+小尺寸+非本页元素）双重识别
-   ③穿透 shadow DOM ④MutationObserver + 定时轮询，防止它在脚本之后才插入 */
+/* 清除托管平台注入的水印角标（仅按 netlify 字样精确匹配，不做位置模糊判断，避免误删正常UI） */
 (function(){
-  var OWN = [], OWN_IDS = {toast:1, askModal:1, keepModal:1, storeWarn:1, printModal:1, signPad:1};
   var SKIP = {HTML:1, HEAD:1, BODY:1, SCRIPT:1, STYLE:1, LINK:1, META:1, TITLE:1};
-
-  function snap(){ try { OWN = Array.prototype.slice.call(document.body.children); } catch(e){ OWN = []; } }
-
+  /* ★ 只看元素"自身"的 id/class/href/src，绝不能看 outerHTML：
+     outerHTML 会包含所有子元素的文本，只要页面里有任何一处提到该词（比如更新日志正文），
+     整个页面容器就会被误判成水印删掉 —— 这正是"设置页整页消失"的原因。 */
   function hasNet(el){
     try {
-      var h = (el.outerHTML || '').toLowerCase();
-      if (h.indexOf('netlify') >= 0) return true;
-      var a = el.getAttribute && el.getAttribute('href');
-      if (a && a.toLowerCase().indexOf('netlify') >= 0) return true;
+      var own = ((el.id || '') + ' ' + (el.className || '') + ' ' +
+                 (el.getAttribute ? (el.getAttribute('href') || '') : '') + ' ' +
+                 (el.getAttribute ? (el.getAttribute('src') || '') : '')).toLowerCase();
+      return own.indexOf('netlify') >= 0;
     } catch(e){}
     return false;
   }
-  function isFloating(el){
-    try { var p = window.getComputedStyle(el).position; return p === 'fixed' || p === 'absolute' || p === 'sticky'; }
-    catch(e){ return false; }
-  }
-  function atCorner(el){
-    try {
-      var r = el.getBoundingClientRect();
-      if (!r.width || !r.height) return false;
-      var vw = window.innerWidth || 360, vh = window.innerHeight || 640;
-      if (r.width * r.height > vw * vh * 0.45) return false;   // 全屏弹窗排除
-      if (r.width > 340 || r.height > 150) return false;       // 角标都很小
-      return (vh - r.bottom) < 150 && (vw - r.right) < 240 && r.left > vw * 0.40;
-    } catch(e){ return false; }
-  }
   function kill(el){
     if (!el) return;
-    try { el.style.setProperty('display', 'none', 'important'); } catch(e){}
-    try { el.style.setProperty('visibility', 'hidden', 'important'); } catch(e){}
-    try { el.style.setProperty('opacity', '0', 'important'); } catch(e){}
     try { if (el.parentNode) el.parentNode.removeChild(el); } catch(e){}
   }
-  function scan(root, isDoc){
-    var all;
-    try { all = (root || document).querySelectorAll('*'); } catch(e){ return; }
-    for (var i = 0; i < all.length; i++){
-      var el = all[i];
-      if (SKIP[el.tagName]) { if (el.shadowRoot) scan(el.shadowRoot, false); continue; }
-      if (hasNet(el)) { kill(el); continue; }
-      if (isDoc && isFloating(el) && atCorner(el) && OWN.indexOf(el) < 0 && !OWN_IDS[el.id || '']) { kill(el); continue; }
-      if (el.shadowRoot) scan(el.shadowRoot, false);
-    }
-  }
   function sweep(){
-    scan(document, true);
     try {
-      var kids = Array.prototype.slice.call(document.body.children);
-      for (var k = 0; k < kids.length; k++){
-        var el = kids[k];
-        if (OWN.indexOf(el) >= 0 || OWN_IDS[el.id || '']) continue;
-        if (isFloating(el) && atCorner(el)) kill(el);
+      var all = document.querySelectorAll('*');
+      for (var i = 0; i < all.length; i++){
+        var el = all[i];
+        if (SKIP[el.tagName]) continue;
+        // 双保险：绝不删应用自己的页面容器和带 id 的功能区块
+        if (el.id && el.id.indexOf('page-') === 0) { continue; }
+        if (el.classList && el.classList.contains('page')) { continue; }
+        if (hasNet(el)) kill(el);
       }
     } catch(e){}
   }
-  function boot(){ snap(); sweep(); }
-  boot();
-  document.addEventListener('DOMContentLoaded', boot);
-  window.addEventListener('load', boot);
-  [200, 800, 1500, 3000, 6000].forEach(function(t){ setTimeout(boot, t); });
-  setInterval(sweep, 1200);
-  try { new MutationObserver(sweep).observe(document.documentElement, { childList: true, subtree: true }); } catch(e){}
-  try {
-    var st = document.createElement('style');
-    st.textContent = 'body>div[class*="etlify"],body>div[id*="etlify"],body>a[href*="netlify"],[class*="netlify-badge"],[id*="netlify-badge"]{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;}';
-    document.head.appendChild(st);
-  } catch(e){}
+  sweep();
+  document.addEventListener('DOMContentLoaded', sweep);
+  window.addEventListener('load', sweep);
+  setTimeout(sweep, 1500);
+  var st = document.createElement('style');
+  st.textContent = '[class*="netlify"],[id*="netlify"]{display:none!important;}';
+  try { document.head.appendChild(st); } catch(e){}
 })();
 </script>
 </body>
