@@ -621,6 +621,14 @@
     <div class="meta" style="margin-top:8px;color:#999">提示：清浏览器缓存会重置编号；重命名不影响历史订单，历史单仍按开单当时的设备记录归类。</div>
   </div>
 
+  <div class="card" style="margin-top:16px;padding:10px;background:#fafbfc">
+    <div style="font-size:12px;color:#888;line-height:1.7">
+      版本：<b id="appVer" style="color:#2b7de9">—</b>
+      <button class="cust-chip" onclick="checkVer()" style="margin-left:6px">自检</button>
+    </div>
+    <div id="verInfo" style="font-size:12px;color:#666;margin-top:6px;line-height:1.7"></div>
+  </div>
+
   <label style="margin-top:16px">客户签字区（打印开关）</label>
   <div class="switch-row">
     <div>
@@ -1273,6 +1281,62 @@ function undoLog(logId){
   }, '撤销');
 }
 
+/* 版本自检：确认部署的是不是最新版、下载环境是否正常 */
+const APP_VER = '2.9';
+function checkVer(){
+  const box=document.getElementById('verInfo');
+  const v=document.getElementById('appVer');
+  if(v) v.textContent = 'v' + APP_VER;
+  if(!box) return;
+  const lines=[];
+  // 1 环境
+  const proto = (location.protocol||'').replace(':','');
+  lines.push('· 打开方式：<b>' + (proto==='file' ? '本地文件 file://（❌ 不能下载，请改用网址）' : '网址 ' + proto + '（✅ 可以下载）') + '</b>');
+  if (isWeChat()) lines.push('· <b style="color:#e34">当前是微信内置浏览器，禁止下载</b> → 点右上角「···」选「在浏览器打开」');
+  // 2 关键模块
+  const mods = [
+    ['XLSX生成器', typeof XLSX !== 'undefined' && typeof XLSX.build === 'function'],
+    ['下载主函数', typeof smartDownload === 'function'],
+    ['Blob下载', typeof smartBlobDownload === 'function'],
+    ['兜底弹窗', typeof showSaveFallback === 'function'],
+    ['订单快照', typeof saveSnapshot === 'function'],
+    ['改前记录', typeof buildOrderHistoryCard === 'function'],
+    ['客户对账', typeof buildStatementSheet === 'function']
+  ];
+  const bad = mods.filter(m=>!m[1]);
+  lines.push('· 模块检查：' + (bad.length ? '<b style="color:#e34">缺失 ' + bad.map(b=>b[0]).join('、') + '</b> → 说明部署的不是最新版，请重新粘贴 index.html' : '<b style="color:#2e7d32">全部正常（' + mods.length + ' 项）</b>'));
+  // 3 数据量
+  try {
+    const n = (DB.get('orders',[])||[]).length;
+    lines.push('· 本机订单：' + n + ' 张');
+  } catch(e){}
+  box.innerHTML = lines.join('<br>')
+    + '<div style="margin-top:8px"><button class="btn btn-add" style="margin:0;padding:8px;font-size:13px" onclick="testDownload()">🧪 测一下能否下载</button>'
+    + ' <span style="font-size:11px;color:#999">会下载一个极小的测试文件</span></div>';
+  toast('自检完成，看下方结果');
+}
+/* 下载自检：生成最小文件，验证浏览器到底让不让下 */
+function testDownload(){
+  const proto = (location.protocol||'').replace(':','');
+  if (proto === 'file') { toast('本地文件模式，浏览器禁止下载 → 请改用网址打开'); return; }
+  if (isWeChat()) { toast('微信内置浏览器禁止下载 → 请用系统浏览器打开'); return; }
+  try {
+    const blob = new Blob(['开单助手下载测试\n如果看到这个文件，说明下载功能正常。'], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '下载测试.txt'; a.style.display='none'; a.rel='noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){
+      try{ URL.revokeObjectURL(url); }catch(e){}
+      if(a.remove)a.remove(); else if(a.parentNode)a.parentNode.removeChild(a);
+    }, 60000);
+    toast('已触发下载，请看下方的下载条/文件夹');
+  } catch(e) {
+    toast('下载被拒绝：' + String(e && e.message || e).slice(0,60));
+  }
+}
+
 function renderOpLog(){
   const el = document.getElementById('oplogList');
   if (!el) return;
@@ -1319,14 +1383,35 @@ let state = {
 function vibrate(ms){ try{ if (navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
 // ★ 服务端基址：优先用设置里填的地址；若本页就是从玩客云打开的（http/https），
 //   直接用页面自己的地址，做到"输 IP 打开就能用"，不用任何配置。
+/* ★ 真后端地址：只认「用户明确填的」或「探测确认真有的」
+   以前只要页面是 http(s) 就把 origin 当后端 → 在 GitHub Pages 这种纯静态托管上
+   会误判，于是去请求 /api/printers、/api/print 等不存在的接口，控制台 404，
+   更糟的是打印会被发到一个死接口上。 */
+let _detectedServer = '';        // 探测确认过的后端
 function serverBase(){
   const cfg = DB.get('cfg', {});
   const u = (cfg.wkUrl || '').trim().replace(/\/+$/, '');
-  if (u) return u;
-  if (location.protocol === 'http:' || location.protocol === 'https:') return location.origin;
-  return '';
+  if (u) return u;               // 用户明确填了，信它
+  return _detectedServer || '';  // 否则只认探测确认过的
 }
 function isHosted(){ return !!serverBase(); }
+/* 异步探测：同源下真有 /api/ping 才算有后端（GitHub Pages 上没有，会失败） */
+function detectServer(){
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return Promise.resolve('');
+  const cfg = DB.get('cfg', {});
+  if ((cfg.wkUrl || '').trim()) return Promise.resolve('');   // 已手动配置，不用探测
+  const origin = location.origin;
+  const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = setTimeout(function(){ if(ctl) ctl.abort(); }, 2500);
+  return fetch(origin + '/api/ping', { method:'GET', signal: ctl ? ctl.signal : undefined })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      clearTimeout(timer);
+      if (d && d.ok) { _detectedServer = origin; return origin; }
+      _detectedServer = ''; return '';
+    })
+    .catch(function(){ clearTimeout(timer); _detectedServer = ''; return ''; });
+}
 /* 页面内确认框：替代原生 confirm（手机浏览器/WebView 常禁用原生 confirm，导致删除、清空类按钮点了没反应） */
 function askConfirm(msg, onOk, okText){
   var old = document.getElementById('askModal'); if (old && old.remove) old.remove();
@@ -1520,6 +1605,7 @@ function init() {
 
   renderLayoutEditor();
   try{ fillShopInputs(); fillPrintStyleInputs(); renderGoodsColEditor(); renderExpCols(); }catch(e){ console.warn('模板设置初始化', e); }
+  try{ var _av=document.getElementById('appVer'); if(_av) _av.textContent='v'+APP_VER; }catch(e){}
   // ★ iOS：编辑器若仍空白（字段渲染中断），强制用默认排版再铺一次
   if (!document.getElementById('layoutEditor').innerHTML.trim()) {
     try { DB.remove('layout'); renderLayoutEditor(); } catch(e) {}
@@ -3267,9 +3353,9 @@ function currentPrintHtmls(){
 function printEndpoint(){
   const cfg = DB.get('cfg', {});
   const u = (cfg.printUrl || '').trim();
-  if (u) return u;
-  const base = serverBase();
-  return base ? base + '/api/print' : '';
+  if (u) return u;                       // 手动填的打印接口
+  const base = serverBase();             // 只认手动配置或探测确认过的
+  return base ? base + '/api/print' : '';// 为空 → doPrint 走浏览器打印
 }
 function testPrint(){
   const ep = printEndpoint();
@@ -3311,14 +3397,21 @@ function openServerAdmin(){
 function updateHostedTip(){
   const tip = document.getElementById('hostedTip');
   if (!tip) return;
-  if (isHosted()) {
+  const cfg = DB.get('cfg', {});
+  const manual = (cfg.wkUrl || '').trim();
+  if (manual) {
+    // 用户自己填了地址才按后端处理
     tip.style.display = 'block';
-    tip.innerHTML = '<b>已连接玩客云</b>：' + esc(serverBase()) +
-      '　备份与打印都会走这台服务器，无需额外配置。';
-    loadPrinters();
-  } else {
-    tip.style.display = 'none';
+    tip.innerHTML = '<b>已连接服务</b>：' + esc(manual) + '　备份与打印都会走这台服务器。';
+    return;
   }
+  // 没填地址 → 先探测，确认有后端才显示并拉打印机（避免 404）
+  detectServer().then(function(base){
+    if (!base) { tip.style.display = 'none'; return; }
+    tip.style.display = 'block';
+    tip.innerHTML = '<b>已连接服务</b>：' + esc(base) + '　备份与打印都会走这台服务器。';
+    loadPrinters();
+  });
 }
 function doPrint() {
   const o = window._printOrder;
@@ -3721,11 +3814,12 @@ function exportCsv() {
       const sheets = buildAllSheets(orders);
       if (!sheets.length) { toast('没有可导出的数据'); return; }
       const blob = XLSX.build(sheets);
-      smartBlobDownload(blob, `开单助手_${dateStr}.xlsx`);
-      toast('✅ Excel 已导出（含 ' + sheets.length + ' 个表）');
-      return;
+      const ok = smartBlobDownload(blob, `开单助手_${dateStr}.xlsx`);
+      if (ok) { toast('✅ Excel 已导出（含 ' + sheets.length + ' 个表）'); return; }
+      // 下载没成功 → 不 return，继续走 CSV 兜底（纯文本更容易下成功）
+      toast('Excel 下载未成功，已改出 CSV');
     } catch(e) {
-      toast('Excel 生成失败，改用 CSV');
+      toast('Excel 生成失败，改出 CSV');
     }
   }
   // ---- CSV：按当前汇总页导出对应报表 ----
@@ -4120,7 +4214,8 @@ var XLSX = (function(){
       add('xl/worksheets/sheet' + (i+1) + '.xml', sheetXml(sh.rows, sh.widths));
     });
     var bytes = zip(files);
-    return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    // ★ 用通用二进制类型：部分手机浏览器不认 xlsx 专用 MIME，会直接拒绝下载
+    return new Blob([bytes], { type: 'application/octet-stream' });
   }
   return { build: build };
 })();
